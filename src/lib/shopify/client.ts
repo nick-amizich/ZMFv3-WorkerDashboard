@@ -21,23 +21,31 @@ export interface ShopifyOrder {
     product_id: number
     variant_id: number
     title: string
+    variant_title?: string
     quantity: number
     price: string
     sku: string
   }>
 }
 
+export interface ShopifyConfig {
+  store_domain: string
+  api_access_token: string
+  api_version?: string
+}
+
 export class ShopifyClient {
   private baseUrl: string
   private accessToken: string
 
-  constructor() {
-    if (!process.env.SHOPIFY_STORE_URL || !process.env.SHOPIFY_ACCESS_TOKEN) {
-      throw new Error('Shopify configuration missing: SHOPIFY_STORE_URL and SHOPIFY_ACCESS_TOKEN required')
+  constructor(config: ShopifyConfig) {
+    if (!config.store_domain || !config.api_access_token) {
+      throw new Error('Shopify configuration missing: store_domain and api_access_token required')
     }
     
-    this.baseUrl = `https://${process.env.SHOPIFY_STORE_URL}.myshopify.com/admin/api/2024-01`
-    this.accessToken = process.env.SHOPIFY_ACCESS_TOKEN
+    const apiVersion = config.api_version || '2024-01'
+    this.baseUrl = `https://${config.store_domain}/admin/api/${apiVersion}`
+    this.accessToken = config.api_access_token
   }
 
   private async makeRequest(endpoint: string): Promise<any> {
@@ -105,5 +113,33 @@ export class ShopifyClient {
 
     const data = await this.makeRequest(`/products.json?${params}`)
     return data.products || []
+  }
+}
+
+/**
+ * Create a Shopify client from stored configuration
+ */
+export async function createShopifyClient(): Promise<ShopifyClient | null> {
+  try {
+    // Import here to avoid circular dependency
+    const { createClient } = await import('@/lib/supabase/server')
+    const supabase = await createClient()
+    
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'shopify_config')
+      .single()
+    
+    if (!settings?.value) {
+      console.error('No Shopify configuration found')
+      return null
+    }
+    
+    const config = settings.value as unknown as ShopifyConfig
+    return new ShopifyClient(config)
+  } catch (error) {
+    console.error('Failed to create Shopify client:', error)
+    return null
   }
 }

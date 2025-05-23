@@ -8,7 +8,7 @@ const navigation = [
   { name: 'Home', href: '/' },
   { name: 'Worker Dashboard', href: '/worker' },
   { name: 'Manager Dashboard', href: '/manager' },
-]
+] as const
 
 export function DashboardNav() {
   const pathname = usePathname()

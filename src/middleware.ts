@@ -1,12 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import type { Database } from '@/types/database'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   })
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -35,15 +36,44 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  const { pathname } = request.nextUrl
+
+  // Public routes that don't require authentication
+  const publicRoutes = ['/login', '/register', '/auth', '/', '/api/health']
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+
+  if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
+  }
+
+  // Check worker status for authenticated users on protected routes
+  if (user && !isPublicRoute) {
+    const { data: worker } = await supabase
+      .from('workers')
+      .select('id, role, is_active')
+      .eq('auth_user_id', user.id)
+      .single()
+
+    if (!worker || !worker.is_active) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/unauthorized'
+      return NextResponse.redirect(url)
+    }
+
+    // Role-based route protection
+    if (pathname.startsWith('/manager') && !['manager', 'supervisor'].includes(worker.role || '')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/worker'
+      return NextResponse.redirect(url)
+    }
+
+    if (pathname.startsWith('/worker') && worker.role === 'manager') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/manager'
+      return NextResponse.redirect(url)
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
