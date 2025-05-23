@@ -1,0 +1,25 @@
+{
+    "mcpServers": {
+      "project-files": {
+        "command": "npx",
+        "args": [
+          "-y", 
+          "@modelcontextprotocol/server-filesystem",
+          "."
+        ]
+      },
+      "supabase": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@supabase/mcp-server-supabase@latest",
+          "--access-token",
+          "sbp_6f3c065b8071590b7fa91f4ffef44313baa57fa3"
+        ]
+      },
+      "shopify-dev-mcp": {
+      "command": "npx",
+      "args": ["-y", "@shopify/dev-mcp@latest"]
+      }
+    }
+  }
