@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [needsMigration, setNeedsMigration] = useState(false)
   const { toast } = useToast()
   
   const [shopifyConfig, setShopifyConfig] = useState({
@@ -35,14 +36,24 @@ export default function SettingsPage() {
   const fetchSettings = async () => {
     try {
       const response = await fetch('/api/settings/shopify')
-      if (response.ok) {
-        const data = await response.json()
+      const data = await response.json()
+      
+      if (response.status === 503 && data.needsMigration) {
+        setNeedsMigration(true)
+        toast({
+          title: 'Database Migration Required',
+          description: 'The settings table needs to be created. Please run the migration.',
+          variant: 'destructive'
+        })
+      } else if (response.ok) {
         setShopifyConfig(data)
+      } else {
+        throw new Error(data.error || 'Failed to load settings')
       }
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to load settings',
+        description: error instanceof Error ? error.message : 'Failed to load settings',
         variant: 'destructive'
       })
     } finally {
@@ -127,6 +138,31 @@ export default function SettingsPage() {
         <h2 className="text-2xl font-bold">Settings</h2>
         <p className="text-muted-foreground">Configure your application settings</p>
       </div>
+      
+      {needsMigration && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="space-y-2">
+            <p className="font-semibold">Database Migration Required</p>
+            <p>The settings table is missing. Please run this SQL in your Supabase dashboard:</p>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm underline">View migration SQL</summary>
+              <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
+{`CREATE TABLE IF NOT EXISTS public.settings (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    key TEXT UNIQUE NOT NULL,
+    value JSONB NOT NULL,
+    encrypted BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_by UUID REFERENCES public.workers(id)
+);`}
+              </pre>
+            </details>
+            <p className="text-sm">Or run the full migration from: <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">run-settings-migration.sql</code></p>
+          </AlertDescription>
+        </Alert>
+      )}
       
       <Tabs defaultValue="shopify" className="space-y-4">
         <TabsList>

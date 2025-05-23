@@ -27,7 +27,7 @@ import { Plus } from 'lucide-react'
 export function CreateTaskModal() {
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState({
-    task_type: 'build',
+    task_type: 'assembly',
     priority: 'normal',
     task_description: '',
     estimated_hours: '',
@@ -88,7 +88,7 @@ export function CreateTaskModal() {
   
   const resetForm = () => {
     setFormData({
-      task_type: 'build',
+      task_type: 'assembly',
       priority: 'normal',
       task_description: '',
       estimated_hours: '',
@@ -132,11 +132,10 @@ export function CreateTaskModal() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="build">Build</SelectItem>
+                <SelectItem value="sanding">Sanding</SelectItem>
+                <SelectItem value="assembly">Assembly</SelectItem>
                 <SelectItem value="qc">Quality Control</SelectItem>
-                <SelectItem value="pack">Pack</SelectItem>
-                <SelectItem value="ship">Ship</SelectItem>
-                <SelectItem value="repair">Repair</SelectItem>
+                <SelectItem value="packaging">Packaging</SelectItem>
               </SelectContent>
             </Select>
           </div>

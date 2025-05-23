@@ -28,9 +28,18 @@ export async function GET() {
       .eq('key', 'shopify_config')
       .single()
     
-    if (settingsError && settingsError.code !== 'PGRST116') {
-      console.error('Error fetching settings:', settingsError)
-      return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 })
+    if (settingsError) {
+      if (settingsError.code === '42P01') {
+        // Table doesn't exist
+        console.error('Settings table not found. Please run the migration.')
+        return NextResponse.json({ 
+          error: 'Settings table not found. Please run the database migration.',
+          needsMigration: true 
+        }, { status: 503 })
+      } else if (settingsError.code !== 'PGRST116') {
+        console.error('Error fetching settings:', settingsError)
+        return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 })
+      }
     }
     
     // Return default config if not found
@@ -79,20 +88,43 @@ export async function POST(request: Request) {
     }
     console.log('Saving Shopify config:', configToLog)
     
-    // Upsert settings
-    const { error: upsertError } = await supabase
+    // Check if settings exist
+    const { data: existingSettings } = await supabase
       .from('settings')
-      .upsert({
-        key: 'shopify_config',
-        value: body,
-        encrypted: false,
-        updated_by: worker.id
-      }, {
-        onConflict: 'key'
-      })
+      .select('id')
+      .eq('key', 'shopify_config')
+      .single()
     
-    if (upsertError) {
-      console.error('Error saving settings:', upsertError)
+    let saveError: any
+    
+    if (existingSettings) {
+      // Update existing settings
+      const { error: updateError } = await supabase
+        .from('settings')
+        .update({
+          value: body,
+          updated_by: worker.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('key', 'shopify_config')
+      
+      saveError = updateError
+    } else {
+      // Insert new settings
+      const { error: insertError } = await supabase
+        .from('settings')
+        .insert({
+          key: 'shopify_config',
+          value: body,
+          encrypted: false,
+          updated_by: worker.id
+        })
+      
+      saveError = insertError
+    }
+    
+    if (saveError) {
+      console.error('Error saving settings:', saveError)
       return NextResponse.json({ error: 'Failed to save settings' }, { status: 500 })
     }
     

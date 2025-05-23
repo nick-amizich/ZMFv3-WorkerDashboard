@@ -180,6 +180,44 @@ export type Database = {
         }
         Relationships: []
       }
+      settings: {
+        Row: {
+          created_at: string | null
+          encrypted: boolean | null
+          id: string
+          key: string
+          updated_at: string | null
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          created_at?: string | null
+          encrypted?: boolean | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          created_at?: string | null
+          encrypted?: boolean | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_logs: {
         Row: {
           created_at: string | null
@@ -339,44 +377,6 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
-      }
-      settings: {
-        Row: {
-          id: string
-          key: string
-          value: Json
-          encrypted: boolean | null
-          created_at: string | null
-          updated_at: string | null
-          updated_by: string | null
-        }
-        Insert: {
-          id?: string
-          key: string
-          value: Json
-          encrypted?: boolean | null
-          created_at?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-        }
-        Update: {
-          id?: string
-          key?: string
-          value?: Json
-          encrypted?: boolean | null
-          created_at?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "settings_updated_by_fkey"
-            columns: ["updated_by"]
-            isOneToOne: false
-            referencedRelation: "workers"
-            referencedColumns: ["id"]
-          }
-        ]
       }
     }
     Views: {

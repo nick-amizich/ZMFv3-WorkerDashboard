@@ -118,7 +118,7 @@ export async function syncShopifyOrders() {
         
         // Create work tasks for new order items
         // Using the correct task types from the database schema
-        const taskTypes = ['build', 'qc', 'pack'] as const
+        const taskTypes = ['sanding', 'assembly', 'qc', 'packaging'] as const
         
         for (const taskType of taskTypes) {
           // Check if task already exists
@@ -183,10 +183,10 @@ export async function syncShopifyOrders() {
 
 function getEstimatedHours(taskType: string): number {
   const estimates: Record<string, number> = {
-    'build': 2.0,
+    'sanding': 1.5,
+    'assembly': 2.0,
     'qc': 0.5,
-    'pack': 0.5,
-    'ship': 0.25,
+    'packaging': 0.5,
     'repair': 1.5
   }
   return estimates[taskType] || 1.0

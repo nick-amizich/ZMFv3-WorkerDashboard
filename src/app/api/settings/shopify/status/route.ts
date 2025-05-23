@@ -6,11 +6,19 @@ export async function GET() {
     const supabase = await createClient()
     
     // Get Shopify settings
-    const { data: settings } = await supabase
+    const { data: settings, error: settingsError } = await supabase
       .from('settings')
       .select('value')
       .eq('key', 'shopify_config')
       .single()
+    
+    if (settingsError) {
+      // If table doesn't exist or no settings found
+      return NextResponse.json({ 
+        configured: false,
+        connected: false 
+      })
+    }
     
     if (!settings?.value) {
       return NextResponse.json({ 

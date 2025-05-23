@@ -125,14 +125,18 @@ export async function createShopifyClient(): Promise<ShopifyClient | null> {
     const { createClient } = await import('@/lib/supabase/server')
     const supabase = await createClient()
     
-    const { data: settings } = await supabase
+    const { data: settings, error } = await supabase
       .from('settings')
       .select('value')
       .eq('key', 'shopify_config')
       .single()
     
-    if (!settings?.value) {
-      console.error('No Shopify configuration found')
+    if (error || !settings?.value) {
+      if (error?.code === '42P01') {
+        console.error('Settings table not found. Please run the database migration.')
+      } else {
+        console.error('No Shopify configuration found')
+      }
       return null
     }
     
