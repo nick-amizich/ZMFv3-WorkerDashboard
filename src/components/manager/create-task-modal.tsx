@@ -102,6 +102,7 @@ export function CreateTaskModal() {
     const dataToSubmit: any = {
       ...formData,
       estimated_hours: formData.estimated_hours ? parseFloat(formData.estimated_hours) : null,
+      assigned_to_id: formData.assigned_to_id === 'unassigned' ? null : formData.assigned_to_id || null,
     }
     createTask.mutate(dataToSubmit)
   }
@@ -210,7 +211,7 @@ export function CreateTaskModal() {
                 <SelectValue placeholder="Select a worker" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Unassigned</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
                 {workers.filter((w: any) => w.role === 'worker').map((worker: any) => (
                   <SelectItem key={worker.id} value={worker.id}>
                     {worker.name}

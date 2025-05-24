@@ -332,7 +332,7 @@ export function AutomationRuleBuilder({
                   <SelectValue placeholder="Apply to all workflows" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Workflows</SelectItem>
+                  <SelectItem value="all">All Workflows</SelectItem>
                   {workflows.map((workflow) => (
                     <SelectItem key={workflow.id} value={workflow.id}>
                       {workflow.name}

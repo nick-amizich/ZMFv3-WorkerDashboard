@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { Home, Package, Users, ClipboardList, Eye, Settings } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { ManagerNavigationV2 } from '@/components/manager/manager-navigation-v2'
 import { ConnectionStatus } from '@/components/features/connection-status'
+import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+import { Eye } from 'lucide-react'
 
 export default async function ManagerLayout({
   children,
@@ -30,51 +31,17 @@ export default async function ManagerLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Top Navigation Bar */}
+      <ManagerNavigationV2 />
+      
+      {/* Secondary Header with User Info */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-8">
-              <h1 className="text-xl font-semibold">Manager Dashboard</h1>
-              <nav className="hidden md:flex space-x-6">
-                <Link 
-                  href="/manager/dashboard" 
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900 flex items-center gap-2"
-                >
-                  <Home className="h-4 w-4" />
-                  Overview
-                </Link>
-                <Link 
-                  href="/manager/tasks" 
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900 flex items-center gap-2"
-                >
-                  <ClipboardList className="h-4 w-4" />
-                  Tasks
-                </Link>
-                <Link 
-                  href="/manager/orders" 
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900 flex items-center gap-2"
-                >
-                  <Package className="h-4 w-4" />
-                  Orders
-                </Link>
-                <Link 
-                  href="/manager/workers" 
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900 flex items-center gap-2"
-                >
-                  <Users className="h-4 w-4" />
-                  Workers
-                </Link>
-                <Link 
-                  href="/manager/settings" 
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900 flex items-center gap-2"
-                >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </Link>
-              </nav>
+          <div className="flex justify-between items-center h-12">
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <ConnectionStatus />
             </div>
             <div className="flex items-center space-x-4">
-              <ConnectionStatus />
               <Button 
                 variant="outline" 
                 size="sm"
@@ -82,16 +49,16 @@ export default async function ManagerLayout({
               >
                 <Link href="/worker" className="flex items-center gap-2">
                   <Eye className="h-4 w-4" />
-                  View as Worker
+                  <span className="hidden sm:inline">View as Worker</span>
                 </Link>
               </Button>
-              <span className="text-sm text-gray-500">
-                {worker.name} ({worker.role})
+              <span className="text-sm text-gray-600">
+                {worker.name} • {worker.role}
               </span>
               <form action="/api/auth/signout" method="POST">
                 <button
                   type="submit"
-                  className="text-sm text-gray-700 hover:text-gray-900"
+                  className="text-sm text-gray-600 hover:text-gray-900"
                 >
                   Sign out
                 </button>
@@ -100,6 +67,8 @@ export default async function ManagerLayout({
           </div>
         </div>
       </header>
+      
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>

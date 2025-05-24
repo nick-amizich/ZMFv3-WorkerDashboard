@@ -23,7 +23,9 @@ import {
   Zap,
   History,
   CheckCircle,
-  XCircle
+  XCircle,
+  Lightbulb,
+  TrendingUp
 } from 'lucide-react'
 
 interface Task {
@@ -220,6 +222,7 @@ export function IssueReportingModal({
   const [previousIssues, setPreviousIssues] = useState<PreviousIssue[]>([])
   const [loadingPrevious, setLoadingPrevious] = useState(false)
   const [stageTemplates, setStageTemplates] = useState<IssueTemplate[]>([])
+  const [qualityPatterns, setQualityPatterns] = useState<any[]>([])
   
   // Determine context from props
   const contextStage = stage || task?.stage || workflowContext?.currentStage || ''
@@ -249,6 +252,21 @@ export function IssueReportingModal({
     }
   }, [contextStage, open])
 
+  // Load quality patterns for this stage
+  const loadQualityPatterns = useCallback(async () => {
+    if (!contextStage || !open) return
+    
+    try {
+      const response = await fetch(`/api/quality/patterns?stage=${contextStage}&limit=3`)
+      if (response.ok) {
+        const patterns = await response.json()
+        setQualityPatterns(patterns)
+      }
+    } catch (error) {
+      console.error('Error loading quality patterns:', error)
+    }
+  }, [contextStage, open])
+
   // Load stage-specific templates
   useEffect(() => {
     if (contextStage && STAGE_TEMPLATES[contextStage]) {
@@ -258,12 +276,13 @@ export function IssueReportingModal({
     }
   }, [contextStage])
 
-  // Load previous issues when modal opens
+  // Load previous issues and quality patterns when modal opens
   useEffect(() => {
     if (open) {
       loadPreviousIssues()
+      loadQualityPatterns()
     }
-  }, [open, loadPreviousIssues])
+  }, [open, loadPreviousIssues, loadQualityPatterns])
 
   // Reset form when modal closes
   useEffect(() => {
@@ -592,6 +611,52 @@ export function IssueReportingModal({
                       </div>
                     </Button>
                   ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Quality Intelligence - Known Patterns */}
+            {qualityPatterns.length > 0 && (
+              <Card className="border-orange-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Lightbulb className="h-4 w-4 text-orange-500" />
+                    Quality Intelligence
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {qualityPatterns.map((pattern, index) => (
+                    <div key={index} className="p-3 bg-orange-50 rounded-lg border border-orange-100">
+                      <div className="flex items-start gap-2">
+                        <TrendingUp className="h-4 w-4 text-orange-600 mt-0.5" />
+                        <div className="space-y-1 flex-1">
+                          <p className="text-sm font-medium text-orange-900">
+                            {pattern.issue_type.replace(/_/g, ' ')} 
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              {pattern.frequency}x this week
+                            </Badge>
+                          </p>
+                          <p className="text-xs text-orange-700">
+                            <strong>Common cause:</strong> {pattern.typical_cause}
+                          </p>
+                          <p className="text-xs text-orange-600">
+                            <strong>Prevention:</strong> {pattern.prevention_tip}
+                          </p>
+                          {pattern.severity_trend === 'increasing' && (
+                            <Badge className="text-xs bg-red-100 text-red-700">
+                              Increasing trend
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <Alert className="border-orange-200 bg-orange-50">
+                    <Lightbulb className="h-3 w-3" />
+                    <AlertDescription className="text-xs">
+                      These patterns help prevent recurring issues. Consider if your issue matches any of these patterns.
+                    </AlertDescription>
+                  </Alert>
                 </CardContent>
               </Card>
             )}

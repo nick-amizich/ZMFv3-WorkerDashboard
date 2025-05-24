@@ -18,10 +18,12 @@ import {
   Timer,
   Package,
   Zap,
-  AlertCircle
+  AlertCircle,
+  Shield
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { QCModal } from './qc-modal'
+import { QualityCheckpointModal } from './quality-checkpoint-modal'
 
 interface WorkerTaskListProps {
   workerId: string
@@ -62,6 +64,8 @@ export function EnhancedWorkerTaskList({ workerId }: WorkerTaskListProps) {
   const { toast } = useToast()
   const [qcModalOpen, setQcModalOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [qualityCheckpointModalOpen, setQualityCheckpointModalOpen] = useState(false)
+  const [checkpointType, setCheckpointType] = useState<'pre_work' | 'post_work'>('pre_work')
 
   const { data: tasks = [] } = useQuery({
     queryKey: ['worker-tasks-enhanced', workerId],
@@ -326,14 +330,29 @@ export function EnhancedWorkerTaskList({ workerId }: WorkerTaskListProps) {
                         
                         <div className="flex space-x-2">
                           {task.status === 'assigned' && (
-                            <Button 
-                              size="sm" 
-                              className="bg-green-600 hover:bg-green-700"
-                              onClick={() => updateTask.mutate({ taskId: task.id, action: 'start' })}
-                            >
-                              <Play className="w-4 h-4 mr-1" />
-                              Start Task
-                            </Button>
+                            <>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                className="border-blue-200 hover:bg-blue-50"
+                                onClick={() => {
+                                  setSelectedTask(task)
+                                  setCheckpointType('pre_work')
+                                  setQualityCheckpointModalOpen(true)
+                                }}
+                              >
+                                <Shield className="w-4 h-4 mr-1" />
+                                Pre-Work Checks
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                className="bg-green-600 hover:bg-green-700"
+                                onClick={() => updateTask.mutate({ taskId: task.id, action: 'start' })}
+                              >
+                                <Play className="w-4 h-4 mr-1" />
+                                Start Task
+                              </Button>
+                            </>
                           )}
                           
                           {task.status === 'in_progress' && (
@@ -359,14 +378,29 @@ export function EnhancedWorkerTaskList({ workerId }: WorkerTaskListProps) {
                                   QC Check
                                 </Button>
                               ) : (
-                                <Button 
-                                  size="sm" 
-                                  className="bg-green-600 hover:bg-green-700"
-                                  onClick={() => updateTask.mutate({ taskId: task.id, action: 'complete' })}
-                                >
-                                  <CheckCircle className="w-4 h-4 mr-1" />
-                                  Complete
-                                </Button>
+                                <>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    className="border-green-200 hover:bg-green-50"
+                                    onClick={() => {
+                                      setSelectedTask(task)
+                                      setCheckpointType('post_work')
+                                      setQualityCheckpointModalOpen(true)
+                                    }}
+                                  >
+                                    <Shield className="w-4 h-4 mr-1" />
+                                    Quality Check
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    className="bg-green-600 hover:bg-green-700"
+                                    onClick={() => updateTask.mutate({ taskId: task.id, action: 'complete' })}
+                                  >
+                                    <CheckCircle className="w-4 h-4 mr-1" />
+                                    Complete
+                                  </Button>
+                                </>
                               )}
                             </>
                           )}
@@ -400,18 +434,43 @@ export function EnhancedWorkerTaskList({ workerId }: WorkerTaskListProps) {
       )}
       
       {selectedTask && (
-        <QCModal
-          open={qcModalOpen}
-          onClose={() => {
-            setQcModalOpen(false)
-            setSelectedTask(null)
-          }}
-          taskId={selectedTask.id}
-          productName={selectedTask.order_item.product_name}
-          onComplete={() => {
-            queryClient.invalidateQueries({ queryKey: ['worker-tasks-enhanced', workerId] })
-          }}
-        />
+        <>
+          <QCModal
+            open={qcModalOpen}
+            onClose={() => {
+              setQcModalOpen(false)
+              setSelectedTask(null)
+            }}
+            taskId={selectedTask.id}
+            productName={selectedTask.order_item.product_name}
+            onComplete={() => {
+              queryClient.invalidateQueries({ queryKey: ['worker-tasks-enhanced', workerId] })
+            }}
+          />
+          
+          <QualityCheckpointModal
+            open={qualityCheckpointModalOpen}
+            onClose={() => {
+              setQualityCheckpointModalOpen(false)
+              setSelectedTask(null)
+            }}
+            taskId={selectedTask.id}
+            stage={selectedTask.stage}
+            checkpointType={checkpointType}
+            productName={selectedTask.order_item.product_name}
+            onComplete={(canProceed) => {
+              if (canProceed) {
+                if (checkpointType === 'pre_work' && selectedTask.status === 'assigned') {
+                  // Auto-start task after successful pre-work checks
+                  updateTask.mutate({ taskId: selectedTask.id, action: 'start' })
+                }
+                queryClient.invalidateQueries({ queryKey: ['worker-tasks-enhanced', workerId] })
+              }
+              setQualityCheckpointModalOpen(false)
+              setSelectedTask(null)
+            }}
+          />
+        </>
       )}
     </div>
   )

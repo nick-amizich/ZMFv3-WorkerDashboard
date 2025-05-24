@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Home, Package, Users, ClipboardList, Settings, Database, ShoppingCart, BarChart3, GitBranch, Bot, Zap, FlaskConical, Wrench, Activity } from 'lucide-react'
+import { Home, Package, Users, ClipboardList, Settings, Database, ShoppingCart, BarChart3, GitBranch, Bot, Zap, FlaskConical, Wrench, Activity, QrCode, Shield, FileText, Layout } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +11,11 @@ const navigationItems = [
     name: 'Overview',
     href: '/manager/dashboard' as const,
     icon: Home,
+  },
+  {
+    name: 'Dashboard V3',
+    href: '/manager/dashboard-v3' as const,
+    icon: Layout,
   },
   {
     name: 'Production Flow',
@@ -28,14 +33,14 @@ const navigationItems = [
     icon: Package,
   },
   {
-    name: 'Import',
-    href: '/manager/orders/import' as const,
-    icon: ShoppingCart,
-  },
-  {
     name: 'Workers',
     href: '/manager/workers' as const,
     icon: Users,
+  },
+  {
+    name: 'Components',
+    href: '/manager/components' as const,
+    icon: QrCode,
   },
   {
     name: 'Workflows',
@@ -46,6 +51,16 @@ const navigationItems = [
     name: 'Analytics',
     href: '/manager/analytics' as const,
     icon: BarChart3,
+  },
+  {
+    name: 'Quality Holds',
+    href: '/manager/quality-holds' as const,
+    icon: Shield,
+  },
+  {
+    name: 'Reports',
+    href: '/manager/reports' as const,
+    icon: FileText,
   },
   {
     name: 'Automation',

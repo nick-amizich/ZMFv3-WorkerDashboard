@@ -53,7 +53,7 @@ export function QuickBatchCreator({ workflows, onBatchCreated }: QuickBatchCreat
         name: formData.name,
         batch_type: formData.batch_type,
         order_item_ids: mockOrderItemIds,
-        workflow_template_id: formData.workflow_template_id || null,
+        workflow_template_id: formData.workflow_template_id === 'none' ? null : formData.workflow_template_id || null,
         criteria: {
           mock_batch: true,
           item_count: formData.item_count
@@ -166,7 +166,7 @@ export function QuickBatchCreator({ workflows, onBatchCreated }: QuickBatchCreat
                 <SelectValue placeholder="Select workflow or leave blank" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No workflow (manual assignment)</SelectItem>
+                <SelectItem value="none">No workflow (manual assignment)</SelectItem>
                 {workflows.map(workflow => (
                   <SelectItem key={workflow.id} value={workflow.id}>
                     {workflow.name}
