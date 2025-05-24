@@ -24,11 +24,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { time_log_id, notes } = body
     
-    // If time_log_id is provided, use it; otherwise find the active timer
+    // If time_log_id is provided, use it directly
     let timeLogId = time_log_id
     
+    // If no time_log_id provided, find the worker's active timer
     if (!timeLogId) {
-      // Find the worker's active timer
       const { data: activeTimer } = await supabase
         .from('time_logs')
         .select('id')
@@ -45,36 +45,31 @@ export async function POST(request: NextRequest) {
       timeLogId = activeTimer.id
     }
     
-    // Verify the time log belongs to this worker
+    // Verify the time log exists and belongs to this worker
     const { data: timeLog } = await supabase
       .from('time_logs')
-      .select('id, worker_id, start_time, end_time')
+      .select('worker_id, end_time')
       .eq('id', timeLogId)
       .single()
     
-    if (!timeLog) {
+    if (!timeLog || timeLog.worker_id !== worker.id) {
       return NextResponse.json({ 
-        error: 'Timer not found' 
+        error: 'Time log not found or not owned by you' 
       }, { status: 404 })
-    }
-    
-    if (timeLog.worker_id !== worker.id) {
-      return NextResponse.json({ 
-        error: 'Timer does not belong to you' 
-      }, { status: 403 })
     }
     
     if (timeLog.end_time) {
       return NextResponse.json({ 
-        error: 'Timer is already stopped' 
+        error: 'Timer already stopped' 
       }, { status: 400 })
     }
     
     // Stop the timer
+    const endTime = new Date().toISOString()
     const { data: updatedTimeLog, error: updateError } = await supabase
       .from('time_logs')
       .update({
-        end_time: new Date().toISOString(),
+        end_time: endTime,
         notes
       })
       .eq('id', timeLogId)
@@ -85,12 +80,13 @@ export async function POST(request: NextRequest) {
           task_description,
           order_item:order_items(
             product_name,
-            order:orders(order_number)
+            order:orders(order_number, customer_name)
           )
         ),
         batch:work_batches(
           id,
-          name
+          name,
+          workflow_template:workflow_templates(name)
         )
       `)
       .single()

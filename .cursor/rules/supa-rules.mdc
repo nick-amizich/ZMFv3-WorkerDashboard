@@ -55,7 +55,7 @@ CREATE POLICY "fast_policy" ON posts
 ### Always Create Indexes
 For any column used in RLS policies:
 ```sql
-CREATE INDEX idx_[table]_[column] ON [table](mdc:[column]);
+CREATE INDEX idx_[table]_[column] ON @table;
 ```
 
 ### Multi-tenant Patterns
@@ -387,8 +387,8 @@ OPENAI_API_KEY=
 ## Documentation References
 
 Always refer to latest docs:
-- [Supabase Docs](mdc:https:/supabase.com/docs)
-- [Next.js App Router](mdc:https:/nextjs.org/docs/app)
-- [TanStack Query](mdc:https:/tanstack.com/query/latest)
+- @Supabase Docs
+- @Next.js App Router
+- @TanStack Query
 
 Remember: Security first, performance second, features third.

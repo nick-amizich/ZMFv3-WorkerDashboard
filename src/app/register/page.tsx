@@ -24,10 +24,16 @@ export default function RegisterPage() {
 
     const supabase = createClient()
     
-    // Create auth user
+    // Get the current origin for redirect URL
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://zmf.randomtask.us'
+    
+    // Create auth user with proper redirect URL
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: `${origin}/login`
+      }
     })
 
     if (authError) {
@@ -65,7 +71,7 @@ export default function RegisterPage() {
 
       toast({
         title: 'Registration successful',
-        description: 'Please wait for manager approval to access the system.',
+        description: 'Please check your email to confirm your account, then wait for manager approval.',
       })
       
       router.push('/login')

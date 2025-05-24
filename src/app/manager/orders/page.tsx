@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-import { RefreshCw, AlertCircle, ChevronDown, ChevronUp, Search, Filter, Calendar, Package, User, DollarSign, Settings } from 'lucide-react'
+import { RefreshCw, AlertCircle, ChevronDown, ChevronUp, Search, Filter, Calendar, Package, User, DollarSign, Settings, Download } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
@@ -379,23 +379,34 @@ export default function OrdersPage() {
             {filteredAndSortedOrders.length} of {orders.length} orders
           </p>
         </div>
-        <Button 
-          variant="outline"
-          onClick={handleSync}
-          disabled={syncing}
-        >
-          {syncing ? (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-              Syncing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Sync with Shopify
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="default"
+            asChild
+          >
+            <a href="/manager/orders/import">
+              <Download className="mr-2 h-4 w-4" />
+              Import Orders
+            </a>
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={handleSync}
+            disabled={syncing}
+          >
+            {syncing ? (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sync with Shopify
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Sync Results */}

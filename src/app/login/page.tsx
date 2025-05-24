@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,12 +10,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast'
 import Link from 'next/link'
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
+
+  // Handle URL parameters for confirmations and errors
+  useEffect(() => {
+    const confirmed = searchParams.get('confirmed')
+    const error = searchParams.get('error')
+
+    if (confirmed === 'true') {
+      toast({
+        title: 'Email Confirmed',
+        description: 'Your email has been confirmed. You can now sign in.',
+      })
+    }
+
+    if (error === 'auth_callback_error') {
+      toast({
+        title: 'Confirmation Error',
+        description: 'There was an error confirming your email. Please try again or contact support.',
+        variant: 'destructive',
+      })
+    }
+  }, [searchParams, toast])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -125,5 +147,21 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }

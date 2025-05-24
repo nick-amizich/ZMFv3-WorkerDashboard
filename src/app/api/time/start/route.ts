@@ -27,21 +27,44 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!stage) {
       return NextResponse.json({ 
-        error: 'Stage is required' 
+        error: 'stage is required' 
       }, { status: 400 })
     }
     
-    // Must have either task_id or batch_id
-    if (!task_id && !batch_id) {
+    // Must have either task_id or batch_id, but not both
+    if ((!task_id && !batch_id) || (task_id && batch_id)) {
       return NextResponse.json({ 
-        error: 'Either task_id or batch_id is required' 
+        error: 'Either task_id or batch_id is required, but not both' 
       }, { status: 400 })
     }
     
-    if (task_id && batch_id) {
-      return NextResponse.json({ 
-        error: 'Cannot specify both task_id and batch_id' 
-      }, { status: 400 })
+    // Verify task or batch exists and worker has access
+    if (task_id) {
+      const { data: task } = await supabase
+        .from('work_tasks')
+        .select('assigned_to_id, status')
+        .eq('id', task_id)
+        .single()
+      
+      if (!task || task.assigned_to_id !== worker.id) {
+        return NextResponse.json({ 
+          error: 'Task not found or not assigned to you' 
+        }, { status: 404 })
+      }
+    }
+    
+    if (batch_id) {
+      const { data: batch } = await supabase
+        .from('work_batches')
+        .select('id, status')
+        .eq('id', batch_id)
+        .single()
+      
+      if (!batch) {
+        return NextResponse.json({ 
+          error: 'Batch not found' 
+        }, { status: 404 })
+      }
     }
     
     // Check if worker already has an active timer
@@ -54,47 +77,11 @@ export async function POST(request: NextRequest) {
     
     if (activeTimer) {
       return NextResponse.json({ 
-        error: 'Worker already has an active timer. Please stop the current timer first.' 
+        error: 'You already have an active timer. Stop it first before starting a new one.' 
       }, { status: 400 })
     }
     
-    // If task_id is provided, verify the task exists and is assigned to this worker
-    if (task_id) {
-      const { data: task } = await supabase
-        .from('work_tasks')
-        .select('id, assigned_to_id')
-        .eq('id', task_id)
-        .single()
-      
-      if (!task) {
-        return NextResponse.json({ 
-          error: 'Task not found' 
-        }, { status: 404 })
-      }
-      
-      if (task.assigned_to_id !== worker.id) {
-        return NextResponse.json({ 
-          error: 'Task is not assigned to you' 
-        }, { status: 403 })
-      }
-    }
-    
-    // If batch_id is provided, verify the batch exists
-    if (batch_id) {
-      const { data: batch } = await supabase
-        .from('work_batches')
-        .select('id')
-        .eq('id', batch_id)
-        .single()
-      
-      if (!batch) {
-        return NextResponse.json({ 
-          error: 'Batch not found' 
-        }, { status: 404 })
-      }
-    }
-    
-    // Start the timer
+    // Create the time log entry
     const { data: timeLog, error: createError } = await supabase
       .from('time_logs')
       .insert({
@@ -111,18 +98,19 @@ export async function POST(request: NextRequest) {
           task_description,
           order_item:order_items(
             product_name,
-            order:orders(order_number)
+            order:orders(order_number, customer_name)
           )
         ),
         batch:work_batches(
           id,
-          name
+          name,
+          workflow_template:workflow_templates(name)
         )
       `)
       .single()
     
     if (createError) {
-      console.error('Error starting timer:', createError)
+      console.error('Error creating time log:', createError)
       return NextResponse.json({ error: 'Failed to start timer' }, { status: 500 })
     }
     
