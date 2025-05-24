@@ -3,29 +3,164 @@
  * CRITICAL: This client must NEVER write to Shopify - READ-ONLY ONLY
  */
 
+export interface ShopifyLineItem {
+  id: number
+  product_id: number
+  variant_id: number
+  title: string
+  name: string
+  variant_title?: string
+  quantity: number
+  price: string
+  sku: string
+  vendor?: string
+  taxable?: boolean
+  gift_card?: boolean
+  fulfillment_status?: string | null
+  fulfillment_service?: string
+  requires_shipping?: boolean
+  properties?: Array<{
+    name: string
+    value: string
+  }>
+  tax_lines?: Array<{
+    title: string
+    price: string
+    rate: number
+  }>
+  duties?: any[]
+  discount_allocations?: any[]
+  total_discount?: string
+  current_quantity?: number
+  fulfillable_quantity?: number
+  variant_inventory_management?: string
+  product_exists?: boolean
+  admin_graphql_api_id?: string
+  price_set?: {
+    shop_money: {
+      amount: string
+      currency_code: string
+    }
+    presentment_money: {
+      amount: string
+      currency_code: string
+    }
+  }
+  total_discount_set?: {
+    shop_money: {
+      amount: string
+      currency_code: string
+    }
+    presentment_money: {
+      amount: string
+      currency_code: string
+    }
+  }
+}
+
+export interface ShopifyCustomer {
+  id: number
+  email: string
+  first_name: string
+  last_name: string
+  phone?: string | null
+  verified_email?: boolean
+  tax_exempt?: boolean
+  currency?: string
+  created_at?: string
+  updated_at?: string
+  state?: string
+  tags?: string
+  note?: string | null
+  default_address?: {
+    id: number
+    customer_id: number
+    first_name: string
+    last_name: string
+    company?: string | null
+    address1: string
+    address2?: string | null
+    city: string
+    province: string
+    country: string
+    zip: string
+    phone?: string | null
+    name: string
+    province_code: string
+    country_code: string
+    country_name: string
+    default: boolean
+  }
+}
+
 export interface ShopifyOrder {
   id: number
   order_number: string
+  name: string
   created_at: string
+  updated_at: string
   financial_status: string
   fulfillment_status: string | null
   total_price: string
-  customer: {
+  subtotal_price: string
+  total_tax: string
+  currency: string
+  confirmed?: boolean
+  closed_at?: string | null
+  cancelled_at?: string | null
+  cancel_reason?: string | null
+  email?: string
+  phone?: string | null
+  customer?: ShopifyCustomer | null
+  tags?: string
+  note?: string | null
+  po_number?: string | null
+  reference?: string
+  source_name?: string
+  line_items: ShopifyLineItem[]
+  shipping_lines?: Array<{
     id: number
-    email: string
+    title: string
+    price: string
+    code: string
+    source: string
+    carrier_identifier?: string
+  }>
+  tax_lines?: Array<{
+    title: string
+    price: string
+    rate: number
+  }>
+  billing_address?: {
     first_name: string
     last_name: string
+    company?: string | null
+    address1: string
+    address2?: string | null
+    city: string
+    province: string
+    country: string
+    zip: string
+    phone?: string | null
+    name: string
+    province_code: string
+    country_code: string
   }
-  line_items: Array<{
-    id: number
-    product_id: number
-    variant_id: number
-    title: string
-    variant_title?: string
-    quantity: number
-    price: string
-    sku: string
-  }>
+  shipping_address?: {
+    first_name: string
+    last_name: string
+    company?: string | null
+    address1: string
+    address2?: string | null
+    city: string
+    province: string
+    country: string
+    zip: string
+    phone?: string | null
+    name: string
+    province_code: string
+    country_code: string
+  }
 }
 
 export interface ShopifyConfig {

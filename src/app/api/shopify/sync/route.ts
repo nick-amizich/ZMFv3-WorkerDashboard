@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { syncShopifyOrders } from '@/lib/shopify/sync'
+import { fetchShopifyOrdersForReview } from '@/lib/shopify/sync'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,21 +22,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
-    // Perform sync
-    const result = await syncShopifyOrders()
+    // Fetch orders for review (doesn't import anything)
+    const result = await fetchShopifyOrdersForReview()
     
     if (result.success) {
       return NextResponse.json({ 
         success: true, 
-        message: `Successfully synced ${result.ordersSynced} orders`,
-        ordersSynced: result.ordersSynced,
-        errors: result.errors || 0,
-        details: result.details || []
+        message: `Found ${result.count} orders for review`,
+        orders: result.orders,
+        count: result.count
       })
     } else {
       return NextResponse.json({ 
-        error: result.error || 'Sync failed',
-        details: result.details || []
+        error: result.error || 'Failed to fetch orders'
       }, { status: 500 })
     }
   } catch (error) {
@@ -45,7 +43,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET endpoint for cron job (Vercel)
+// GET endpoint for cron job (Vercel) - now just fetches for review
 export async function GET(request: NextRequest) {
   // Verify cron secret if provided
   const authHeader = request.headers.get('authorization')
@@ -54,23 +52,21 @@ export async function GET(request: NextRequest) {
   }
   
   try {
-    const result = await syncShopifyOrders()
+    const result = await fetchShopifyOrdersForReview()
     
     if (result.success) {
       return NextResponse.json({ 
         success: true, 
-        message: `Successfully synced ${result.ordersSynced} orders`,
-        ordersSynced: result.ordersSynced,
-        errors: result.errors || 0,
-        details: result.details || []
+        message: `Found ${result.count} orders available for import`,
+        count: result.count
       })
     } else {
       return NextResponse.json({ 
-        error: result.error || 'Sync failed' 
+        error: result.error || 'Failed to fetch orders' 
       }, { status: 500 })
     }
   } catch (error) {
-    console.error('Cron sync error:', error)
+    console.error('Cron fetch error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

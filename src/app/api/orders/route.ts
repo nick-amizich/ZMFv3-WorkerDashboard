@@ -30,7 +30,15 @@ export async function GET() {
       .from('orders')
       .select(`
         *,
-        order_items (count)
+        order_items (
+          id,
+          product_name,
+          variant_title,
+          quantity,
+          price,
+          sku,
+          product_data
+        )
       `)
       .order('created_at', { ascending: false })
     
