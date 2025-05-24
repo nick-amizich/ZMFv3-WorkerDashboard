@@ -13,158 +13,116 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    // Validate employee status (only managers can generate tasks)
+    // ALWAYS validate employee status
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, name, role, is_active')
+      .select('id, role, is_active')
       .eq('auth_user_id', user.id)
       .single()
     
     if (!worker?.is_active || !['manager', 'supervisor'].includes(worker.role || '')) {
-      return NextResponse.json({ error: 'Forbidden: Only managers can generate tasks' }, { status: 403 })
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
-    const { id: batchId } = await params
+    const { id } = await params
     const body = await request.json()
     const { 
-      auto_assign = false,
+      auto_assign = false, 
       assignment_rule = 'least_busy',
       specific_worker_id,
-      override_existing = false,
-      stage_override,
+      stage,
       priority = 'normal'
     } = body
     
-    // Get the batch with its workflow
+    // Get batch with workflow info
     const { data: batch, error: batchError } = await supabase
       .from('work_batches')
       .select(`
         *,
-        workflow_template:workflow_templates(
-          id,
-          name,
-          stages,
-          stage_transitions
-        )
+        workflow_template:workflow_templates(id, name, stages)
       `)
-      .eq('id', batchId)
+      .eq('id', id)
       .single()
     
     if (batchError || !batch) {
-      return NextResponse.json({ 
-        error: 'Batch not found' 
-      }, { status: 404 })
+      return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
     }
     
     if (!batch.workflow_template) {
       return NextResponse.json({ 
-        error: 'Batch has no workflow assigned. Please assign a workflow first.' 
+        error: 'Batch does not have a workflow assigned' 
       }, { status: 400 })
     }
     
-    // Determine the target stage
-    const targetStage = stage_override || batch.current_stage
+    // Determine which stage to generate tasks for
+    const targetStage = stage || batch.current_stage
     if (!targetStage) {
       return NextResponse.json({ 
-        error: 'No current stage found. Please transition the batch to a stage first.' 
+        error: 'No stage specified and batch has no current stage' 
       }, { status: 400 })
     }
     
     // Get stage definition from workflow
-    const stages = batch.workflow_template.stages as any[]
-    const stageData = stages.find(s => s.stage === targetStage)
+    const stages = (batch.workflow_template.stages as any[]) || []
+    const stageDefinition = stages.find(s => s.stage === targetStage)
     
-    if (!stageData) {
+    if (!stageDefinition) {
       return NextResponse.json({ 
         error: `Stage '${targetStage}' not found in workflow` 
       }, { status: 400 })
     }
     
-    // Check if tasks already exist for this stage and batch
-    const { data: existingTasks } = await supabase
-      .from('work_tasks')
-      .select('id, status')
-      .eq('batch_id', batchId)
-      .eq('stage', targetStage)
-    
-    if (existingTasks && existingTasks.length > 0 && !override_existing) {
-      return NextResponse.json({ 
-        error: `Tasks already exist for stage '${targetStage}'. Use override_existing=true to replace them.`,
-        existing_tasks: existingTasks.length
-      }, { status: 409 })
-    }
-    
-    // If overriding, delete existing tasks
-    if (override_existing && existingTasks && existingTasks.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('work_tasks')
-        .delete()
-        .eq('batch_id', batchId)
-        .eq('stage', targetStage)
-      
-      if (deleteError) {
-        console.error('Error deleting existing tasks:', deleteError)
-        return NextResponse.json({ error: 'Failed to delete existing tasks' }, { status: 500 })
-      }
-    }
-    
-    // Get workers for assignment if auto_assign is true
-    let assignedWorker = null
+    // Get worker for assignment if specified
+    let assignedWorkerId = null
     if (auto_assign) {
       if (specific_worker_id) {
-        // Verify the specific worker exists and is active
-        const { data: specificWorker } = await supabase
-          .from('workers')
-          .select('id, name, is_active, skills')
-          .eq('id', specific_worker_id)
-          .eq('is_active', true)
-          .single()
-        
-        if (!specificWorker) {
-          return NextResponse.json({ 
-            error: 'Specified worker not found or inactive' 
-          }, { status: 400 })
-        }
-        
-        assignedWorker = specificWorker
+        assignedWorkerId = specific_worker_id
       } else {
-        // Find workers based on assignment rule
-        assignedWorker = await findWorkerByRule(supabase, assignment_rule, targetStage, stageData.required_skills)
+        // Apply assignment rule logic
+        const { data: availableWorkers, error: workersError } = await supabase
+          .from('worker_stage_assignments')
+          .select(`
+            worker_id,
+            worker:workers(id, name, is_active)
+          `)
+          .eq('stage', targetStage)
+          .eq('is_active', true)
+        
+        if (workersError) {
+          console.error('Error fetching available workers:', workersError)
+        } else if (availableWorkers && availableWorkers.length > 0) {
+          // Simple assignment logic - use first available worker
+          // In a real implementation, this would implement proper load balancing
+          assignedWorkerId = availableWorkers[0].worker_id
+        }
       }
     }
     
     // Create tasks for each order item in the batch
-    const taskInserts = batch.order_item_ids.map(orderItemId => ({
+    const taskInserts = batch.order_item_ids.map((orderItemId: string) => ({
       order_item_id: orderItemId,
-      batch_id: batchId,
+      batch_id: id,
       task_type: targetStage,
       stage: targetStage,
-      task_description: `${stageData.name || targetStage}: ${stageData.description || 'Complete this stage'}`,
+      task_description: `${stageDefinition.name}: ${stageDefinition.description || ''}`,
       workflow_template_id: batch.workflow_template_id,
-      assigned_to_id: assignedWorker?.id || null,
-      assigned_by_id: auto_assign && assignedWorker ? worker.id : null,
       auto_generated: true,
-      manual_assignment: !auto_assign,
-      estimated_hours: stageData.estimated_hours || null,
-      status: auto_assign && assignedWorker ? 'assigned' : 'pending',
-      priority,
-      notes: `Generated for ${batch.name} - ${stageData.name || targetStage}`
+      manual_assignment: !stageDefinition.is_automated,
+      estimated_hours: stageDefinition.estimated_hours || null,
+      assigned_to_id: assignedWorkerId,
+      assigned_by_id: assignedWorkerId ? worker.id : null,
+      status: 'pending',
+      priority: priority
     }))
     
+    // Insert tasks
     const { data: createdTasks, error: tasksError } = await supabase
       .from('work_tasks')
       .insert(taskInserts)
       .select(`
         *,
-        order_item:order_items(
-          id,
-          product_name,
-          order:orders(order_number, customer_name)
-        ),
-        assigned_to:workers(
-          id,
-          name
-        )
+        order_item:order_items(product_name),
+        assigned_to:workers(id, name)
       `)
     
     if (tasksError) {
@@ -173,20 +131,18 @@ export async function POST(
     }
     
     // Log the task generation
-    const { error: logError } = await supabase
+    const { error: logError } = await (supabase as any)
       .from('workflow_execution_log')
       .insert({
         workflow_template_id: batch.workflow_template_id,
-        batch_id: batchId,
+        batch_id: id,
         stage: targetStage,
         action: 'tasks_generated',
         action_details: {
-          tasks_created: createdTasks?.length || 0,
+          tasks_count: taskInserts.length,
           auto_assign,
           assignment_rule,
-          assigned_worker_id: assignedWorker?.id,
-          override_existing,
-          stage_override
+          assigned_worker_id: assignedWorkerId
         },
         executed_by_id: worker.id,
         execution_type: 'manual'
@@ -194,97 +150,22 @@ export async function POST(
     
     if (logError) {
       console.error('Error logging task generation:', logError)
-      // Don't fail the whole operation, just log it
+      // Don't fail the operation for logging errors
     }
     
-    const response = {
-      batch_id: batchId,
-      stage: targetStage,
-      tasks_created: createdTasks?.length || 0,
+    return NextResponse.json({
+      message: `Successfully generated ${createdTasks?.length || 0} tasks for stage '${targetStage}'`,
       tasks: createdTasks || [],
-      assignment_info: auto_assign ? {
-        auto_assigned: true,
-        assignment_rule,
-        assigned_worker: assignedWorker ? {
-          id: assignedWorker.id,
-          name: assignedWorker.name
-        } : null
-      } : {
-        auto_assigned: false,
-        manual_assignment_required: true
-      },
-      generated_at: new Date().toISOString(),
-      generated_by: {
-        id: worker.id,
-        name: worker.name || 'Manager'
+      stage: targetStage,
+      batch_id: id,
+      assignment_info: {
+        auto_assigned: auto_assign && !!assignedWorkerId,
+        assignment_rule: auto_assign ? assignment_rule : null,
+        assigned_worker_id: assignedWorkerId
       }
-    }
-    
-    return NextResponse.json(response)
+    })
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
-
-async function findWorkerByRule(supabase: any, rule: string, stage: string, requiredSkills: string[] = []) {
-  try {
-    // Get workers who can work on this stage
-    let query = supabase
-      .from('workers')
-      .select('id, name, skills')
-      .eq('is_active', true)
-    
-    // Filter by skills if specified
-    if (requiredSkills.length > 0) {
-      // In a real implementation, you'd want to check if worker skills overlap with required skills
-      // For now, we'll get all active workers and filter in JavaScript
-    }
-    
-    const { data: workers } = await query.limit(20)
-    
-    if (!workers || workers.length === 0) {
-      return null
-    }
-    
-    // Filter workers by required skills
-    const skilledWorkers = workers.filter((w: any) => {
-      if (!requiredSkills.length) return true
-      if (!w.skills) return false
-      return requiredSkills.some((skill: string) => w.skills.includes(skill) || w.skills.includes('all_stages'))
-    })
-    
-    const availableWorkers = skilledWorkers.length > 0 ? skilledWorkers : workers
-    
-    switch (rule) {
-      case 'round_robin':
-        // Simple round robin - could be enhanced with persistent state
-        return availableWorkers[Math.floor(Math.random() * availableWorkers.length)]
-      
-      case 'least_busy':
-        // Get worker with fewest active tasks
-        const { data: taskCounts } = await supabase
-          .from('work_tasks')
-          .select('assigned_to_id, count')
-          .in('assigned_to_id', availableWorkers.map((w: any) => w.id))
-          .in('status', ['assigned', 'in_progress'])
-        
-        const workerTaskCounts = availableWorkers.map((worker: any) => ({
-          ...worker,
-          taskCount: taskCounts?.find((tc: any) => tc.assigned_to_id === worker.id)?.count || 0
-        }))
-        
-        return workerTaskCounts.sort((a: any, b: any) => a.taskCount - b.taskCount)[0]
-      
-      case 'specific_worker':
-        // This case is handled in the main function
-        return availableWorkers[0]
-      
-      default:
-        return availableWorkers[0]
-    }
-  } catch (error) {
-    console.error('Error finding worker:', error)
-    return null
   }
 } 

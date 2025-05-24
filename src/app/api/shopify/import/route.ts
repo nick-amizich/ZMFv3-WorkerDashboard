@@ -3,11 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { importSelectedLineItems } from '@/lib/shopify/sync'
 
 export async function POST(request: NextRequest) {
+  console.log('Import API called')
+  
   try {
     const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
     
     if (error || !user) {
+      console.error('Auth error:', error)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
@@ -18,25 +21,36 @@ export async function POST(request: NextRequest) {
       .eq('auth_user_id', user.id)
       .single()
     
+    console.log('Worker found:', worker)
+    
     if (!worker?.is_active || !['manager', 'supervisor'].includes(worker.role || '')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      console.error('Worker not authorized:', worker)
+      return NextResponse.json({ error: 'Forbidden - must be active manager or supervisor' }, { status: 403 })
     }
     
     // Parse request body
     const body = await request.json()
+    console.log('Import request body:', body)
+    
     const { orderId, lineItemIds } = body
     
     if (!orderId || !lineItemIds || !Array.isArray(lineItemIds) || lineItemIds.length === 0) {
+      console.error('Invalid request:', { orderId, lineItemIds })
       return NextResponse.json({ 
-        error: 'Missing required fields: orderId and lineItemIds' 
+        error: 'Missing required fields: orderId and lineItemIds',
+        received: { orderId, lineItemIds }
       }, { status: 400 })
     }
+    
+    console.log('Importing order:', orderId, 'with items:', lineItemIds)
     
     // Import selected line items
     const result = await importSelectedLineItems({
       orderId: Number(orderId),
       lineItemIds: lineItemIds.map(id => Number(id))
     })
+    
+    console.log('Import result:', result)
     
     if (result.success) {
       return NextResponse.json({ 
@@ -47,6 +61,7 @@ export async function POST(request: NextRequest) {
         details: result.details
       })
     } else {
+      console.error('Import failed:', result)
       return NextResponse.json({ 
         error: result.error || 'Import failed',
         details: result.details || []
@@ -54,6 +69,9 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Import API Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 } 

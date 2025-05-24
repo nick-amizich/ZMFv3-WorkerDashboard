@@ -185,10 +185,13 @@ export async function importSelectedLineItems(selections: {
   orderId: number
   lineItemIds: number[]
 }) {
+  console.log('importSelectedLineItems called with:', selections)
+  
   const shopifyClient = await createShopifyClient()
   const supabase = await createClient()
   
   if (!shopifyClient) {
+    console.error('Shopify client not available')
     return { 
       success: false, 
       error: 'Shopify not configured'
@@ -199,14 +202,18 @@ export async function importSelectedLineItems(selections: {
   
   try {
     // Get the specific order from Shopify
+    console.log('Fetching order from Shopify:', selections.orderId)
     const shopifyOrder = await shopifyClient.getOrder(selections.orderId)
     
     if (!shopifyOrder) {
+      console.error('Order not found in Shopify:', selections.orderId)
       return {
         success: false,
         error: 'Order not found in Shopify'
       }
     }
+    
+    console.log('Found Shopify order:', shopifyOrder.order_number)
     
     // First, ensure the order exists in our system
     const orderData: OrderInsert = {
@@ -224,6 +231,7 @@ export async function importSelectedLineItems(selections: {
     }
     
     // Upsert order
+    console.log('Upserting order:', orderData.shopify_order_id)
     const { data: upsertedOrder, error: orderError } = await supabase
       .from('orders')
       .upsert(orderData, {
@@ -233,11 +241,14 @@ export async function importSelectedLineItems(selections: {
       .single()
     
     if (orderError || !upsertedOrder) {
+      console.error('Order upsert failed:', orderError)
       return {
         success: false,
         error: `Failed to create order: ${orderError?.message}`
       }
     }
+    
+    console.log('Order upserted successfully:', upsertedOrder.id)
     
     let itemsCreated = 0
     let tasksCreated = 0
@@ -301,6 +312,7 @@ export async function importSelectedLineItems(selections: {
           const taskData: WorkTaskInsert = {
             order_item_id: orderItem.id,
             task_type: taskType,
+            stage: taskType, // Set stage as well for v2 compatibility
             task_description: generateTaskDescription(taskType, orderItem.product_name, headphoneSpecs),
             status: 'pending',
             priority: headphoneSpecs.requires_custom_work ? 'high' : 'normal',

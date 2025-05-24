@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Home, Package, Users, ClipboardList, Settings, Database, ShoppingCart } from 'lucide-react'
+import { Home, Package, Users, ClipboardList, Settings, Database, ShoppingCart, BarChart3, GitBranch, Bot, Zap, FlaskConical, Wrench, Activity } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +11,11 @@ const navigationItems = [
     name: 'Overview',
     href: '/manager/dashboard' as const,
     icon: Home,
+  },
+  {
+    name: 'Production Flow',
+    href: '/manager/production-flow' as const,
+    icon: GitBranch,
   },
   {
     name: 'Tasks',
@@ -33,9 +38,39 @@ const navigationItems = [
     icon: Users,
   },
   {
+    name: 'Workflows',
+    href: '/manager/workflows' as const,
+    icon: Bot,
+  },
+  {
+    name: 'Analytics',
+    href: '/manager/analytics' as const,
+    icon: BarChart3,
+  },
+  {
+    name: 'Automation',
+    href: '/manager/automation' as const,
+    icon: Zap,
+  },
+  {
     name: 'Settings',
     href: '/manager/settings' as const,
     icon: Settings,
+  },
+  {
+    name: 'Test Import',
+    href: '/manager/test-import' as const,
+    icon: FlaskConical,
+  },
+  {
+    name: 'Fix Data',
+    href: '/manager/fix-data' as const,
+    icon: Wrench,
+  },
+  {
+    name: 'Import Status',
+    href: '/manager/import-status' as const,
+    icon: Activity,
   },
 ]
 

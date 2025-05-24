@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
@@ -26,6 +26,16 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
+    // Check if we just want counts
+    const url = new URL(request.url)
+    if (url.searchParams.get('count') === 'items') {
+      const { count } = await supabase
+        .from('order_items')
+        .select('*', { count: 'exact', head: true })
+      
+      return NextResponse.json({ count })
+    }
+    
     const { data: orders, error: ordersError } = await supabase
       .from('orders')
       .select(`
@@ -47,7 +57,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 })
     }
     
-    return NextResponse.json(orders || [])
+    return NextResponse.json({ orders: orders || [] })
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

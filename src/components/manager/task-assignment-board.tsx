@@ -33,7 +33,7 @@ export function TaskAssignmentBoard() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   
-  const { data: tasks = [] } = useQuery({
+  const { data: tasksResponse } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => {
       const response = await fetch('/api/tasks')
@@ -42,6 +42,8 @@ export function TaskAssignmentBoard() {
     },
     refetchInterval: 30000 // Auto-refresh every 30 seconds
   })
+
+  const tasks = tasksResponse?.tasks || []
 
   const { data: workers = [] } = useQuery({
     queryKey: ['workers'],
