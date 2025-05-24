@@ -39,13 +39,11 @@ export async function GET(
         *,
         reported_by:workers!production_issues_reported_by_id_fkey(
           id,
-          name,
-          employee_id
+          name
         ),
         resolved_by:workers!production_issues_resolved_by_id_fkey(
           id,
-          name,
-          employee_id
+          name
         ),
         task:work_tasks(
           id,

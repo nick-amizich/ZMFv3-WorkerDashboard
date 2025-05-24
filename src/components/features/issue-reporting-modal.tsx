@@ -341,11 +341,16 @@ export function IssueReportingModal({
       // Upload images first if any
       const imageUrls: string[] = []
       if (images.length > 0) {
-        // TODO: Implement image upload to storage
-        // For now, we'll just use placeholder URLs
-        images.forEach((_, index) => {
-          imageUrls.push(`/api/placeholder-image-${Date.now()}-${index}`)
-        })
+        // Image upload would happen here with Supabase Storage
+        // For demonstration, using data URLs
+        for (const image of images) {
+          const reader = new FileReader()
+          const dataUrl = await new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.readAsDataURL(image)
+          })
+          imageUrls.push(dataUrl)
+        }
       }
 
       const response = await fetch('/api/issues/report', {

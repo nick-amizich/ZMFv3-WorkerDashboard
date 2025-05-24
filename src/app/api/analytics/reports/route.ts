@@ -387,7 +387,7 @@ async function generateBreakdownSection(
   
   return Object.entries(breakdownData).map(([key, value]) => ({
     [section.groupBy || 'key']: key,
-    ...value
+    ...(typeof value === 'object' && value !== null ? value : { value })
   }))
 }
 

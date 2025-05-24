@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
-  console.log('Debug import called')
   
   try {
     const supabase = await createClient()
@@ -22,7 +21,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No order items without tasks found' })
     }
     
-    console.log('Found order item:', orderItem.id, orderItem.product_name)
     
     // Parse product data to determine tasks
     const productData = orderItem.product_data as any
@@ -41,7 +39,6 @@ export async function GET(request: NextRequest) {
       ? ['sanding', 'assembly', 'qc', 'packaging']
       : ['qc', 'packaging']
     
-    console.log('Creating tasks for category:', productCategory, 'tasks:', taskTypes)
     
     const createdTasks = []
     
@@ -64,7 +61,6 @@ export async function GET(request: NextRequest) {
       if (error) {
         console.error('Failed to create task:', taskType, error)
       } else {
-        console.log('Created task:', task.id, task.task_description)
         createdTasks.push(task)
       }
     }

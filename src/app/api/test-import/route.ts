@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { fetchShopifyOrdersForReview, importSelectedLineItems } from '@/lib/shopify/sync'
 
 export async function GET(request: NextRequest) {
-  console.log('Test import endpoint called')
   
   try {
     const supabase = await createClient()
@@ -14,7 +13,6 @@ export async function GET(request: NextRequest) {
     }
     
     // Step 1: Fetch orders
-    console.log('Step 1: Fetching orders from Shopify')
     const fetchResult = await fetchShopifyOrdersForReview()
     
     if (!fetchResult.success || !fetchResult.orders?.length) {
@@ -28,14 +26,12 @@ export async function GET(request: NextRequest) {
     const firstOrder = fetchResult.orders[0]
     const firstItem = firstOrder.line_items[0]
     
-    console.log('Step 2: Importing first order', firstOrder.id, 'item', firstItem.id)
     
     const importResult = await importSelectedLineItems({
       orderId: firstOrder.id,
       lineItemIds: [firstItem.id]
     })
     
-    console.log('Step 3: Import result', importResult)
     
     // Step 4: Check what was created
     const { data: tasks } = await supabase

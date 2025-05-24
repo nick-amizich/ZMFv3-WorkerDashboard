@@ -70,29 +70,27 @@ export async function POST(
     // Validate the transition is allowed
     if (batch.workflow_template) {
       const stages = batch.workflow_template.stages as any[]
-      const transitions = batch.workflow_template.stage_transitions as any[]
       
       // Check if the to_stage exists in the workflow
       const targetStage = stages.find(s => s.stage === to_stage)
-      if (!targetStage) {
+      if (!targetStage && to_stage !== 'pending') {
         return NextResponse.json({ 
           error: `Stage '${to_stage}' is not defined in the workflow` 
         }, { status: 400 })
       }
       
-      // If we have a current stage, check if the transition is valid
+      // If we have a current stage, check if it's the same
       if (batch.current_stage) {
-        const validTransition = transitions.find(t => 
-          t.from_stage === batch.current_stage && 
-          t.to_stage.includes(to_stage)
-        )
-        
-        if (!validTransition) {
+        // Skip validation if moving to the same stage
+        if (batch.current_stage === to_stage) {
           return NextResponse.json({ 
-            error: `Invalid transition from '${batch.current_stage}' to '${to_stage}'` 
+            error: `Batch is already in the '${to_stage}' stage` 
           }, { status: 400 })
         }
       }
+      
+      // Allow all transitions for manager override (forward and backward)
+      // This enables fixing mistakes and rework scenarios
     }
     
     // Update the batch

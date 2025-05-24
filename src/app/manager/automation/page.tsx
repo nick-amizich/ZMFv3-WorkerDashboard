@@ -184,16 +184,12 @@ export default function AutomationPage() {
 
   const handleDuplicateRule = async (rule: AutomationRule) => {
     try {
+      const { id, created_at, updated_at, execution_stats, ...newRuleData } = rule
       const newRule = {
-        ...rule,
+        ...newRuleData,
         name: `${rule.name} (Copy)`,
         is_active: false
       }
-      delete newRule.id
-      delete newRule.created_at
-      delete newRule.updated_at
-      delete newRule.execution_stats
-
       const response = await fetch('/api/automation/rules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -607,11 +603,8 @@ export default function AutomationPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Rule Builder Dialog */}
-      <Dialog open={showBuilder} onOpenChange={(open) => {
-        setShowBuilder(open)
-        if (!open) setEditingRule(null)
-      }}>
+      {/* Automation Rule Builder Dialog */}
+      {/* <Dialog open={showBuilder} onOpenChange={setShowBuilder}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <AutomationRuleBuilder
             rule={editingRule || undefined}
@@ -623,7 +616,20 @@ export default function AutomationPage() {
             }}
           />
         </DialogContent>
-      </Dialog>
+      </Dialog> */}
+      
+      {showBuilder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <h3 className="text-lg font-medium mb-4">Automation Builder</h3>
+            <p className="text-gray-600 mb-4">
+              Automation rule builder temporarily disabled for v2.0. 
+              This feature will be available in v3.0.
+            </p>
+            <Button onClick={() => setShowBuilder(false)}>Close</Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

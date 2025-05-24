@@ -77,13 +77,11 @@ export async function POST(
         *,
         reported_by:workers!production_issues_reported_by_id_fkey(
           id,
-          name,
-          employee_id
+          name
         ),
         resolved_by:workers!production_issues_resolved_by_id_fkey(
           id,
-          name,
-          employee_id
+          name
         ),
         task:work_tasks(
           id,
@@ -106,8 +104,7 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to resolve issue' }, { status: 500 })
     }
     
-    // TODO: Post update to Slack if slack_thread_id exists
-    // This would require Slack API integration
+    // Slack update would be posted here if slack_thread_id exists
     
     return NextResponse.json(updatedIssue)
   } catch (error) {

@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
-  console.log('Fix missing tasks called')
   
   try {
     const supabase = await createClient()
@@ -31,7 +30,6 @@ export async function POST(request: NextRequest) {
       !item.work_tasks || item.work_tasks.length === 0
     ) || []
     
-    console.log(`Found ${itemsWithoutTasks.length} items without tasks`)
     
     let totalTasksCreated = 0
     const results = []
@@ -59,7 +57,6 @@ export async function POST(request: NextRequest) {
         ? ['assembly', 'qc', 'packaging']
         : ['qc', 'packaging']
       
-      console.log(`Creating ${taskTypes.length} tasks for ${item.product_name} (${productCategory})`)
       
       for (const taskType of taskTypes) {
         const taskData = {

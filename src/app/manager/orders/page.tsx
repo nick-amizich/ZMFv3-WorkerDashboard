@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast'
 import { RefreshCw, AlertCircle, Search, Filter, Calendar, Package, User, DollarSign, Download, Clock } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
 
 // Types for Shopify import
 interface ShopifyLineItem {
@@ -46,6 +47,11 @@ interface ShopifyOrder {
     email: string
   }
   line_items: ShopifyLineItem[]
+  _import_status?: {
+    has_imported_items: boolean
+    imported_count: number
+    total_count: number
+  }
 }
 
 export default function OrdersPage() {
@@ -321,7 +327,14 @@ export default function OrdersPage() {
         <Alert className="border-blue-200">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Found {lastSyncResult.count} orders available for import from Shopify.
+            <div className="space-y-1">
+              <p>Found {lastSyncResult.count} orders with unimported items from Shopify.</p>
+              {lastSyncResult.count === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  All recent orders have been imported. Check Shopify for new orders.
+                </p>
+              )}
+            </div>
           </AlertDescription>
         </Alert>
       )}
@@ -447,6 +460,11 @@ export default function OrdersPage() {
                         <Badge variant="outline">
                           {order.financial_status}
                         </Badge>
+                        {order._import_status?.has_imported_items && (
+                          <Badge variant="secondary" className="text-xs">
+                            {order._import_status.imported_count}/{order._import_status.total_count} imported
+                          </Badge>
+                        )}
                       </CardTitle>
                       <div className="text-sm text-muted-foreground space-y-1">
                         <div className="flex items-center gap-4">
@@ -552,17 +570,30 @@ export default function OrdersPage() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Package className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No orders available for import</h3>
+            <h3 className="text-lg font-semibold mb-2">
+              {lastSyncResult && lastSyncResult.count === 0 
+                ? 'All orders have been imported!' 
+                : 'No orders available for import'}
+            </h3>
             <p className="text-muted-foreground text-center mb-4">
               {searchTerm || categoryFilter !== 'all' 
                 ? 'Try adjusting your filters to see more orders.'
-                : 'No new orders found from Shopify. Try syncing to refresh the list.'
+                : lastSyncResult && lastSyncResult.count === 0
+                  ? 'All recent Shopify orders have been successfully imported into the production system.'
+                  : 'No new orders found from Shopify. Try syncing to refresh the list.'
               }
             </p>
-            <Button onClick={() => fetchShopifyOrders(true)} disabled={loading}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh Shopify Orders
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => fetchShopifyOrders(true)} disabled={loading}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Check for New Orders
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/manager/tasks">
+                  View Production Tasks
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

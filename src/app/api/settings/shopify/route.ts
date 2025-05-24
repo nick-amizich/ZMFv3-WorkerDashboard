@@ -86,7 +86,6 @@ export async function POST(request: Request) {
     if (configToLog.api_access_token) {
       configToLog.api_access_token = '***'
     }
-    console.log('Saving Shopify config:', configToLog)
     
     // Check if settings exist
     const { data: existingSettings } = await supabase

@@ -38,11 +38,6 @@ const navigationItems = [
     icon: Users,
   },
   {
-    name: 'Components',
-    href: '/manager/components' as const,
-    icon: QrCode,
-  },
-  {
     name: 'Workflows',
     href: '/manager/workflows' as const,
     icon: Bot,

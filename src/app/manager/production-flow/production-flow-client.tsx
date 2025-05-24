@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import { EnhancedProductionFlowBoard } from '@/components/manager/enhanced-production-flow-board'
-import { QuickBatchCreator } from '@/components/manager/quick-batch-creator'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { BatchCreatorModal } from '@/components/manager/batch-creator-modal'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 
@@ -33,26 +32,23 @@ export function ProductionFlowPageClient({ workflows }: ProductionFlowPageClient
           <p className="text-gray-600">Real-time workflow execution monitoring</p>
         </div>
         
-        <Dialog open={showBatchCreator} onOpenChange={setShowBatchCreator}>
-          <DialogTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Test Batch
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Test Batch</DialogTitle>
-            </DialogHeader>
-            <QuickBatchCreator 
-              workflows={workflows} 
-              onBatchCreated={handleBatchCreated}
-            />
-          </DialogContent>
-        </Dialog>
+        <Button 
+          className="bg-green-600 hover:bg-green-700"
+          onClick={() => setShowBatchCreator(true)}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Create Batch
+        </Button>
       </div>
 
       <EnhancedProductionFlowBoard key={refreshKey} />
+      
+      <BatchCreatorModal
+        open={showBatchCreator}
+        onClose={() => setShowBatchCreator(false)}
+        workflows={workflows}
+        onBatchCreated={handleBatchCreated}
+      />
     </div>
   )
 } 

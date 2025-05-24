@@ -33,7 +33,7 @@ interface QualityMetrics {
 
 interface StageMetrics {
   stage: string
-  yield: number
+  yieldRate: number
   averageTime: number
   issueCount: number
   topIssues: string[]
@@ -62,10 +62,10 @@ export function QualityAnalyticsDashboard() {
   })
 
   const [stageMetrics, setStageMetrics] = useState<StageMetrics[]>([
-    { stage: 'sanding', yield: 98, averageTime: 42, issueCount: 2, topIssues: ['Surface roughness'] },
-    { stage: 'finishing', yield: 91, averageTime: 65, issueCount: 7, topIssues: ['Niblets', 'Uneven coating'] },
-    { stage: 'assembly', yield: 96, averageTime: 38, issueCount: 4, topIssues: ['Gimbal tension'] },
-    { stage: 'quality_control', yield: 95, averageTime: 15, issueCount: 5, topIssues: ['Visual defects'] }
+    { stage: 'sanding', yieldRate: 98, averageTime: 42, issueCount: 2, topIssues: ['Surface roughness'] },
+    { stage: 'finishing', yieldRate: 91, averageTime: 65, issueCount: 7, topIssues: ['Niblets', 'Uneven coating'] },
+    { stage: 'assembly', yieldRate: 96, averageTime: 38, issueCount: 4, topIssues: ['Gimbal tension'] },
+    { stage: 'quality_control', yieldRate: 95, averageTime: 15, issueCount: 5, topIssues: ['Visual defects'] }
   ])
 
   const [qualityPatterns, setQualityPatterns] = useState<QualityPattern[]>([])
@@ -103,15 +103,15 @@ export function QualityAnalyticsDashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  const getYieldColor = (yield: number) => {
-    if (yield >= 95) return 'text-green-600'
-    if (yield >= 85) return 'text-yellow-600'
+  const getYieldColor = (yieldRate: number) => {
+    if (yieldRate >= 95) return 'text-green-600'
+    if (yieldRate >= 85) return 'text-yellow-600'
     return 'text-red-600'
   }
 
-  const getYieldBadgeColor = (yield: number) => {
-    if (yield >= 95) return 'bg-green-100 text-green-800'
-    if (yield >= 85) return 'bg-yellow-100 text-yellow-800'
+  const getYieldBadgeColor = (yieldRate: number) => {
+    if (yieldRate >= 95) return 'bg-green-100 text-green-800'
+    if (yieldRate >= 85) return 'bg-yellow-100 text-yellow-800'
     return 'bg-red-100 text-red-800'
   }
 
@@ -228,8 +228,8 @@ export function QualityAnalyticsDashboard() {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge className={getYieldBadgeColor(stage.yield)}>
-                      {stage.yield}% yield
+                    <Badge className={getYieldBadgeColor(stage.yieldRate)}>
+                      {stage.yieldRate}% yield
                     </Badge>
                     {stage.issueCount > 0 && (
                       <Badge variant="outline" className="text-orange-600 border-orange-200">
@@ -239,7 +239,7 @@ export function QualityAnalyticsDashboard() {
                   </div>
                 </div>
                 
-                <Progress value={stage.yield} className="h-2 mb-3" />
+                <Progress value={stage.yieldRate} className="h-2 mb-3" />
                 
                 {stage.topIssues.length > 0 && (
                   <div className="flex items-center gap-2 text-sm">

@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const status = url.searchParams.get('status')
     const workflowId = url.searchParams.get('workflow_id')
     
-    // Build query
+    // Build query - note: order_items relationship needs to be handled separately
     let query = supabase
       .from('work_batches')
       .select(`
@@ -35,16 +35,6 @@ export async function GET(request: NextRequest) {
           id,
           name,
           description
-        ),
-        order_items(
-          id,
-          product_name,
-          quantity,
-          sku,
-          order:orders(
-            order_number,
-            customer_name
-          )
         )
       `)
       .order('created_at', { ascending: false })
@@ -65,7 +55,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
     }
     
-    return NextResponse.json(batches || [])
+    // For each batch, fetch the order items separately
+    const batchesWithItems = await Promise.all(
+      (batches || []).map(async (batch) => {
+        if (!batch.order_item_ids || batch.order_item_ids.length === 0) {
+          return { ...batch, order_items: [] }
+        }
+        
+        const { data: orderItems } = await supabase
+          .from('order_items')
+          .select(`
+            id,
+            product_name,
+            quantity,
+            sku,
+            orders!inner(
+              order_number,
+              customer_name
+            )
+          `)
+          .in('id', batch.order_item_ids)
+        
+        return {
+          ...batch,
+          order_items: orderItems || []
+        }
+      })
+    )
+    
+    return NextResponse.json(batchesWithItems)
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -154,16 +172,6 @@ export async function POST(request: NextRequest) {
           id,
           name,
           description
-        ),
-        order_items(
-          id,
-          product_name,
-          quantity,
-          sku,
-          order:orders(
-            order_number,
-            customer_name
-          )
         )
       `)
       .single()
@@ -173,7 +181,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create batch' }, { status: 500 })
     }
     
-    return NextResponse.json(batch)
+    // Fetch the order items separately
+    let batchWithItems: any = { ...batch, order_items: [] }
+    if (batch && order_item_ids.length > 0) {
+      const { data: orderItemsData } = await supabase
+        .from('order_items')
+        .select(`
+          id,
+          product_name,
+          quantity,
+          sku,
+          orders!inner(
+            order_number,
+            customer_name
+          )
+        `)
+        .in('id', order_item_ids)
+      
+      batchWithItems.order_items = orderItemsData || []
+    }
+    
+    return NextResponse.json(batchWithItems)
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

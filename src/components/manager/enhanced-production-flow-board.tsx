@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
-import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,15 +11,11 @@ import { useToast } from '@/hooks/use-toast'
 import { 
   Workflow, 
   Clock, 
-  Users, 
   AlertTriangle, 
   CheckCircle, 
-  ArrowRight, 
-  Settings, 
   Zap,
   Timer,
   Package,
-  Eye,
   RefreshCw,
   TrendingUp,
   AlertCircle
@@ -68,7 +63,6 @@ interface ProductionFlowBoardProps {
 
 export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: ProductionFlowBoardProps) {
   const { toast } = useToast()
-  const supabase = createClient()
   
   // State
   const [workflows, setWorkflows] = useState<WorkflowTemplate[]>([])
@@ -79,6 +73,8 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
   const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null)
   const [showBatchDetails, setShowBatchDetails] = useState(false)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [isDragging, setIsDragging] = useState(false)
+  const [optimisticBatches, setOptimisticBatches] = useState<Batch[]>([])
 
   // Load workflows
   const loadWorkflows = useCallback(async () => {
@@ -94,7 +90,7 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
   }, [])
 
   // Load batches with workflow context
-  const loadBatches = useCallback(async () => {
+  const loadBatches = useCallback(async (updateOptimistic = true) => {
     try {
       const response = await fetch('/api/batches')
       if (response.ok) {
@@ -109,6 +105,9 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
         )
         
         setBatches(enhancedBatches)
+        if (updateOptimistic) {
+          setOptimisticBatches(enhancedBatches)
+        }
       }
     } catch (error) {
       console.error('Error loading batches:', error)
@@ -177,7 +176,7 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
   }
 
   // Generate stage columns based on selected workflow
-  const generateStageColumns = useCallback(() => {
+  const generateStageColumns = useCallback((batchData: Batch[]) => {
     if (selectedWorkflow === 'all') {
       // Show all standard stages
       const standardStages = [
@@ -195,7 +194,7 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
       
       return standardStages.map(stage => ({
         ...stage,
-        batches: batches.filter(b => 
+        batches: batchData.filter(b => 
           b.current_stage === stage.stage_code || 
           (stage.stage_code === 'pending' && !b.current_stage) ||
           (stage.stage_code === 'completed' && b.status === 'completed')
@@ -220,7 +219,7 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
       
       return workflowStages.map(stage => ({
         ...stage,
-        batches: batches.filter(b => 
+        batches: batchData.filter(b => 
           (b.workflow_template_id === selectedWorkflow || selectedWorkflow === 'all') &&
           (b.current_stage === stage.stage_code || 
            (stage.stage_code === 'pending' && !b.current_stage) ||
@@ -229,18 +228,42 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
         bottleneck_score: 0
       }))
     }
-  }, [selectedWorkflow, workflows, batches])
+  }, [selectedWorkflow, workflows])
 
-  // Handle drag and drop
+  // Handle drag start
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true)
+  }, [])
+
+  // Handle drag and drop with optimistic updates
   const handleDragEnd = useCallback(async (result: DropResult) => {
+    setIsDragging(false)
+    
     if (!result.destination) return
     
     const { source, destination, draggableId } = result
     
-    if (source.droppableId === destination.droppableId) return
+    // Don't do anything if dropped in the same column
+    if (source.droppableId === destination.droppableId) {
+      return
+    }
     
     const batchId = draggableId
     const newStage = destination.droppableId
+    
+    // Optimistically update the UI
+    const updatedBatches = optimisticBatches.map(batch => {
+      if (batch.id === batchId) {
+        return {
+          ...batch,
+          current_stage: newStage === 'pending' ? null : newStage,
+          status: newStage === 'completed' ? 'completed' as const : batch.status
+        }
+      }
+      return batch
+    })
+    
+    setOptimisticBatches(updatedBatches)
     
     try {
       // Transition batch to new stage
@@ -259,8 +282,8 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
         throw new Error(error.error || 'Failed to transition batch')
       }
       
-      // Refresh data
-      await loadBatches()
+      // Refresh data in background
+      setTimeout(() => loadBatches(false), 1000)
       
       toast({
         title: 'Batch moved',
@@ -268,23 +291,28 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
       })
     } catch (error) {
       console.error('Error moving batch:', error)
+      // Revert optimistic update on error
+      setOptimisticBatches(batches)
       toast({
         title: 'Failed to move batch',
         description: error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive'
       })
     }
-  }, [loadBatches, toast])
+  }, [optimisticBatches, batches, loadBatches, toast])
 
-  // Auto-refresh data
+  // Auto-refresh data (but pause during drag operations)
   useEffect(() => {
     const interval = setInterval(() => {
-      loadBatches()
-      setLastRefresh(new Date())
+      // Don't refresh while dragging
+      if (!isDragging) {
+        loadBatches(false) // Don't update optimistic state during auto-refresh
+        setLastRefresh(new Date())
+      }
     }, refreshInterval)
 
     return () => clearInterval(interval)
-  }, [refreshInterval, loadBatches])
+  }, [refreshInterval, loadBatches, isDragging])
 
   // Load initial data
   useEffect(() => {
@@ -294,19 +322,20 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
 
   // Update stage columns when data changes
   useEffect(() => {
-    setStageColumns(generateStageColumns())
-  }, [generateStageColumns])
+    setStageColumns(generateStageColumns(isDragging ? optimisticBatches : batches))
+  }, [generateStageColumns, batches, optimisticBatches, isDragging])
 
   // Calculate overall statistics
   const overallStats = useMemo(() => {
-    const activeBatches = batches.filter(b => b.status === 'active').length
-    const completedToday = batches.filter(b => 
+    const currentBatches = isDragging ? optimisticBatches : batches
+    const activeBatches = currentBatches.filter(b => b.status === 'active').length
+    const completedToday = currentBatches.filter(b => 
       b.status === 'completed' && 
       new Date(b.updated_at).toDateString() === new Date().toDateString()
     ).length
     
     const bottlenecks = stageColumns.filter(col => col.batches.length > 3).length
-    const avgTimeInStage = batches.reduce((sum, b) => sum + (b._stats?.time_in_current_stage || 0), 0) / Math.max(batches.length, 1)
+    const avgTimeInStage = currentBatches.reduce((sum, b) => sum + (b._stats?.time_in_current_stage || 0), 0) / Math.max(currentBatches.length, 1)
 
     return {
       activeBatches,
@@ -314,7 +343,7 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
       bottlenecks,
       avgTimeInStage: Math.round(avgTimeInStage * 10) / 10
     }
-  }, [batches, stageColumns])
+  }, [batches, optimisticBatches, isDragging, stageColumns])
 
   if (loading) {
     return (
@@ -328,9 +357,9 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 h-full flex flex-col">
       {/* Header with Workflow Selection */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Production Flow Board</h2>
           <p className="text-gray-600">Monitor and manage workflow execution in real-time</p>
@@ -351,10 +380,14 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
             </SelectContent>
           </Select>
           
-          <Button variant="outline" onClick={() => {
-            loadBatches()
-            setLastRefresh(new Date())
-          }}>
+          <Button 
+            variant="outline" 
+            disabled={isDragging}
+            onClick={() => {
+              loadBatches()
+              setLastRefresh(new Date())
+            }}
+          >
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -362,7 +395,7 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
       </div>
 
       {/* Overall Statistics */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-4 flex-shrink-0">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -412,105 +445,111 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
         </Card>
       </div>
 
-      {/* Stage Columns */}
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex space-x-4 overflow-x-auto pb-4">
-          {stageColumns.map(column => (
-            <div key={column.id} className="flex-shrink-0 w-80">
-              <Card>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-medium flex items-center space-x-2">
-                      <span>{column.name}</span>
-                      {column.automation_type === 'automated' && (
-                        <Zap className="h-3 w-3 text-blue-600" />
-                      )}
-                    </CardTitle>
-                    <Badge variant={column.batches.length > 3 ? 'destructive' : 'secondary'}>
-                      {column.batches.length}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                
-                <Droppable droppableId={column.stage_code}>
-                  {(provided, snapshot) => (
-                    <CardContent
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={`space-y-2 min-h-32 ${
-                        snapshot.isDraggingOver ? 'bg-blue-50' : ''
-                      }`}
-                    >
-                      {column.batches.map((batch, index) => (
-                        <Draggable key={batch.id} draggableId={batch.id} index={index}>
-                          {(provided, snapshot) => (
-                            <Card
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              className={`cursor-move ${
-                                snapshot.isDragging ? 'rotate-2 shadow-lg' : ''
-                              }`}
-                              onClick={() => {
-                                setSelectedBatch(batch)
-                                setShowBatchDetails(true)
-                              }}
-                            >
-                              <CardContent className="p-3">
-                                <div className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <h4 className="font-medium text-sm">{batch.name}</h4>
-                                    <Badge 
-                                      variant={batch.status === 'active' ? 'default' : 'secondary'}
-                                      className="text-xs"
-                                    >
-                                      {batch.status}
-                                    </Badge>
-                                  </div>
-                                  
-                                  {batch.workflow_template && (
-                                    <div className="flex items-center space-x-1 text-xs text-gray-500">
-                                      <Workflow className="h-3 w-3" />
-                                      <span>{batch.workflow_template.name}</span>
+      {/* Stage Columns - Fixed height container that fits content */}
+      <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="flex-1 min-h-0">
+          <div className="grid gap-4 h-full" style={{ gridTemplateColumns: `repeat(${stageColumns.length}, 1fr)` }}>
+            {stageColumns.map(column => (
+              <div key={column.id} className="flex flex-col min-h-0">
+                <Card className="flex-1 flex flex-col min-h-0">
+                  <CardHeader className="pb-3 flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-medium flex items-center space-x-2">
+                        <span>{column.name}</span>
+                        {column.automation_type === 'automated' && (
+                          <Zap className="h-3 w-3 text-blue-600" />
+                        )}
+                      </CardTitle>
+                      <Badge variant={column.batches.length > 3 ? 'destructive' : 'secondary'}>
+                        {column.batches.length}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  
+                  <Droppable droppableId={column.stage_code}>
+                    {(provided, snapshot) => (
+                      <CardContent
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`flex-1 overflow-y-auto space-y-2 min-h-32 ${
+                          snapshot.isDraggingOver ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        {column.batches.map((batch, index) => (
+                          <Draggable key={batch.id} draggableId={batch.id} index={index}>
+                            {(provided, snapshot) => (
+                              <Card
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                className={`cursor-move transition-all duration-200 ${
+                                  snapshot.isDragging ? 'rotate-1 shadow-lg scale-105 opacity-90' : 'hover:shadow-md'
+                                }`}
+                                onClick={(e) => {
+                                  // Only open details if not dragging
+                                  if (!snapshot.isDragging) {
+                                    setSelectedBatch(batch)
+                                    setShowBatchDetails(true)
+                                  }
+                                }}
+                              >
+                                <CardContent className="p-3">
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <h4 className="font-medium text-sm">{batch.name}</h4>
+                                      <Badge 
+                                        variant={batch.status === 'active' ? 'default' : 'secondary'}
+                                        className="text-xs"
+                                      >
+                                        {batch.status}
+                                      </Badge>
                                     </div>
-                                  )}
-                                  
-                                  <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div className="flex items-center space-x-1">
-                                      <Package className="h-3 w-3" />
-                                      <span>{batch._stats?.total_items || 0} items</span>
+                                    
+                                    {batch.workflow_template && (
+                                      <div className="flex items-center space-x-1 text-xs text-gray-500">
+                                        <Workflow className="h-3 w-3" />
+                                        <span>{batch.workflow_template.name}</span>
+                                      </div>
+                                    )}
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                      <div className="flex items-center space-x-1">
+                                        <Package className="h-3 w-3" />
+                                        <span>{batch._stats?.total_items || 0} items</span>
+                                      </div>
+                                      <div className="flex items-center space-x-1">
+                                        <Clock className="h-3 w-3" />
+                                        <span>{batch._stats?.time_in_current_stage || 0}h</span>
+                                      </div>
                                     </div>
-                                    <div className="flex items-center space-x-1">
-                                      <Clock className="h-3 w-3" />
-                                      <span>{batch._stats?.time_in_current_stage || 0}h</span>
-                                    </div>
-                                  </div>
 
-                                  {batch._stats && batch._stats.time_in_current_stage > 8 && (
-                                    <div className="flex items-center space-x-1 text-xs text-orange-600">
-                                      <AlertCircle className="h-3 w-3" />
-                                      <span>Long stage time</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </CardContent>
-                  )}
-                </Droppable>
-              </Card>
-            </div>
-          ))}
+                                    {batch._stats && batch._stats.time_in_current_stage > 8 && (
+                                      <div className="flex items-center space-x-1 text-xs text-orange-600">
+                                        <AlertCircle className="h-3 w-3" />
+                                        <span>Long stage time</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </CardContent>
+                    )}
+                  </Droppable>
+                </Card>
+              </div>
+            ))}
+          </div>
         </div>
       </DragDropContext>
 
       {/* Last Refresh Indicator */}
-      <div className="text-center text-sm text-gray-500">
+      <div className="text-center text-sm text-gray-500 flex-shrink-0">
         Last updated: {lastRefresh.toLocaleTimeString()}
+        {isDragging && <span className="ml-2 text-blue-600">(Paused - dragging in progress)</span>}
       </div>
 
       {/* Batch Details Dialog */}

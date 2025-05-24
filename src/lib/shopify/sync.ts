@@ -133,9 +133,11 @@ function getEstimatedHours(taskType: string, productCategory: string, hasCustomW
 /**
  * Fetch orders from Shopify for manager review
  * Does NOT automatically import into production system
+ * Filters out orders/items that have already been imported
  */
 export async function fetchShopifyOrdersForReview() {
   const shopifyClient = await createShopifyClient()
+  const supabase = await createClient()
   
   if (!shopifyClient) {
     return { 
@@ -149,18 +151,54 @@ export async function fetchShopifyOrdersForReview() {
     // Fetch recent orders from Shopify
     const orders = await shopifyClient.getOrders(50) // Get last 50 orders
     
-    // Enhance each order with parsed headphone specs
-    const enhancedOrders = orders.map(order => ({
-      ...order,
-      line_items: order.line_items.map(lineItem => ({
-        ...lineItem,
-        headphone_specs: parseHeadphoneSpecs(lineItem),
-        estimated_tasks: getRequiredTasks(
-          parseHeadphoneSpecs(lineItem).product_category, 
-          parseHeadphoneSpecs(lineItem).requires_custom_work
+    // Get all imported Shopify order IDs and line item IDs
+    const { data: importedOrders } = await supabase
+      .from('orders')
+      .select('shopify_order_id')
+    
+    const { data: importedLineItems } = await supabase
+      .from('order_items')
+      .select('shopify_line_item_id')
+      .not('shopify_line_item_id', 'is', null)
+    
+    const importedOrderIds = new Set(importedOrders?.map(o => o.shopify_order_id) || [])
+    const importedLineItemIds = new Set(importedLineItems?.map(i => i.shopify_line_item_id) || [])
+    
+    // Filter and enhance orders
+    const enhancedOrders = orders
+      .map(order => {
+        // Check if entire order is imported
+        const isOrderFullyImported = importedOrderIds.has(order.id) && 
+          order.line_items.every(item => importedLineItemIds.has(item.id))
+        
+        // Filter out already imported line items
+        const unimportedLineItems = order.line_items.filter(
+          item => !importedLineItemIds.has(item.id)
         )
-      }))
-    }))
+        
+        // Only include orders that have unimported items
+        if (unimportedLineItems.length === 0) {
+          return null
+        }
+        
+        return {
+          ...order,
+          _import_status: {
+            has_imported_items: order.line_items.length > unimportedLineItems.length,
+            imported_count: order.line_items.length - unimportedLineItems.length,
+            total_count: order.line_items.length
+          },
+          line_items: unimportedLineItems.map(lineItem => ({
+            ...lineItem,
+            headphone_specs: parseHeadphoneSpecs(lineItem),
+            estimated_tasks: getRequiredTasks(
+              parseHeadphoneSpecs(lineItem).product_category, 
+              parseHeadphoneSpecs(lineItem).requires_custom_work
+            )
+          }))
+        }
+      })
+      .filter(order => order !== null) // Remove fully imported orders
     
     return { 
       success: true, 

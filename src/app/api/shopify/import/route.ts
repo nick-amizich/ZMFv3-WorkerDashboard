@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { importSelectedLineItems } from '@/lib/shopify/sync'
 
 export async function POST(request: NextRequest) {
-  console.log('Import API called')
   
   try {
     const supabase = await createClient()
@@ -21,7 +20,6 @@ export async function POST(request: NextRequest) {
       .eq('auth_user_id', user.id)
       .single()
     
-    console.log('Worker found:', worker)
     
     if (!worker?.is_active || !['manager', 'supervisor'].includes(worker.role || '')) {
       console.error('Worker not authorized:', worker)
@@ -30,19 +28,16 @@ export async function POST(request: NextRequest) {
     
     // Parse request body
     const body = await request.json()
-    console.log('Import request body:', body)
     
     const { orderId, lineItemIds } = body
     
     if (!orderId || !lineItemIds || !Array.isArray(lineItemIds) || lineItemIds.length === 0) {
-      console.error('Invalid request:', { orderId, lineItemIds })
       return NextResponse.json({ 
         error: 'Missing required fields: orderId and lineItemIds',
         received: { orderId, lineItemIds }
       }, { status: 400 })
     }
     
-    console.log('Importing order:', orderId, 'with items:', lineItemIds)
     
     // Import selected line items
     const result = await importSelectedLineItems({
@@ -50,7 +45,6 @@ export async function POST(request: NextRequest) {
       lineItemIds: lineItemIds.map(id => Number(id))
     })
     
-    console.log('Import result:', result)
     
     if (result.success) {
       return NextResponse.json({ 

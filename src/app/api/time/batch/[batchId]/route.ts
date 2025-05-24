@@ -52,8 +52,7 @@ export async function GET(
         *,
         worker:workers(
           id,
-          name,
-          employee_id
+          name
         ),
         task:work_tasks(
           id,

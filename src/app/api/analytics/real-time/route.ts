@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
         }
       }
       
-      const waitMinutes = Math.floor((now.getTime() - new Date(task.created_at).getTime()) / (1000 * 60))
+      const waitMinutes = Math.floor((now.getTime() - new Date(task.created_at || new Date()).getTime()) / (1000 * 60))
       bottlenecksByStage[task.stage].waitingTasks++
       bottlenecksByStage[task.stage].totalWaitMinutes += waitMinutes
       bottlenecksByStage[task.stage].maxWaitMinutes = Math.max(
@@ -222,7 +222,7 @@ export async function GET(request: NextRequest) {
         severity: issue.severity,
         title: issue.title,
         reportedBy: issue.reported_by?.name || 'Unknown',
-        minutesAgo: Math.floor((now.getTime() - new Date(issue.created_at).getTime()) / (1000 * 60)),
+        minutesAgo: Math.floor((now.getTime() - new Date(issue.created_at || now.toISOString()).getTime()) / (1000 * 60)),
         status: issue.resolution_status
       })),
       systemHealth: {

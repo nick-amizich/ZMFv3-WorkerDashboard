@@ -271,16 +271,16 @@ export default async function ManagerDashboard() {
             </Card>
 
             <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <Link href="/manager/components">
+              <Link href="/manager/tasks">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Target className="h-5 w-5" />
-                    Component Tracking
+                    Task Management
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground">
-                    Track components with QR codes
+                    Manage and assign tasks
                   </p>
                 </CardContent>
               </Link>

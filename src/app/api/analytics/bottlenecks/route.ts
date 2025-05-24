@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
       // Calculate throughput
       const completedInWindow = stageTransitionData.filter(t => 
         t.from_stage === stage && 
-        new Date(t.transition_time) >= startTime
+        t.transition_time && new Date(t.transition_time) >= startTime
       ).length
       
       const windowHours = (now.getTime() - startTime.getTime()) / (1000 * 60 * 60)

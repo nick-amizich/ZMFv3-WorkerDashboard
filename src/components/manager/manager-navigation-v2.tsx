@@ -222,7 +222,7 @@ export function ManagerNavigationV2() {
                       {item.children.map((child) => (
                         <DropdownMenuItem key={child.href} asChild>
                           <Link
-                            href={child.href}
+                            href={child.href as any}
                             className={cn(
                               "w-full cursor-pointer",
                               isActive(child.href) && "bg-blue-50"
@@ -248,7 +248,7 @@ export function ManagerNavigationV2() {
               return (
                 <Link
                   key={item.name}
-                  href={item.href!}
+                  href={item.href! as any}
                   className={cn(
                     "flex items-center space-x-1 px-3 py-2 text-sm font-medium rounded-md transition-colors",
                     active

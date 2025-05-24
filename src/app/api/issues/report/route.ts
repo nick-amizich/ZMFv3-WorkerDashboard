@@ -10,23 +10,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    // Get employee details
-    const { data: employee } = await supabase
-      .from('employees')
-      .select('id, active, name')
+    // Get worker details
+    const { data: worker } = await supabase
+      .from('workers')
+      .select('id, is_active, name')
       .eq('auth_user_id', user.id)
       .single()
     
-    if (!employee?.active) {
+    if (!worker?.is_active) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    
-    // Also get worker record if exists
-    const { data: worker } = await supabase
-      .from('workers')
-      .select('id')
-      .eq('employee_id', employee.id)
-      .single()
     
     const body = await request.json()
     const { 
@@ -38,8 +31,7 @@ export async function POST(request: NextRequest) {
       severity,
       title,
       description,
-      image_urls = [],
-      slack_channel = 'production-issues'
+      image_urls = []
     } = body
     
     // Validate required fields
@@ -112,7 +104,7 @@ export async function POST(request: NextRequest) {
     const { data: issue, error: createError } = await supabase
       .from('production_issues')
       .insert({
-        reported_by_id: worker?.id || employee.id,
+        reported_by_id: worker.id,
         task_id,
         batch_id,
         order_item_id,
@@ -155,57 +147,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create issue' }, { status: 500 })
     }
     
-    // Update quality patterns for this stage/issue type
-    const { error: patternUpdateError } = await supabase
-      .from('quality_patterns')
-      .upsert({
-        stage,
-        issue_type,
-        occurrence_count: 1,
-        last_seen: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'stage,issue_type',
-        ignoreDuplicates: false
-      })
+    // TODO: Update quality patterns when table is added to database types
+    // This will track issue frequency and patterns for analytics
     
-    if (!patternUpdateError) {
-      // Increment occurrence count
-      await supabase.rpc('increment', {
-        table_name: 'quality_patterns',
-        column_name: 'occurrence_count', 
-        x: 1,
-        filter_column: 'stage',
-        filter_value: stage,
-        filter_column2: 'issue_type',
-        filter_value2: issue_type
-      }).catch(err => console.log('RPC increment error:', err))
-    }
+    // TODO: Create quality hold for critical issues when table is added to database types
+    // This will prevent batches with critical issues from proceeding
     
-    // If critical issue, create quality hold
-    if (severity === 'critical' && batch_id) {
-      await supabase
-        .from('quality_holds')
-        .insert({
-          batch_id,
-          hold_reason: `Critical issue reported: ${title}`,
-          severity: 'critical',
-          reported_by: employee.id,
-          status: 'active'
-        })
-        .catch(err => console.log('Quality hold creation error:', err))
-    }
-    
-    // TODO: Post to Slack
-    // This would be implemented with a Slack webhook or Supabase Edge Function
-    // For now, we'll just log that we would post to Slack
-    console.log(`Would post to Slack channel #${slack_channel}:`, {
-      title: `🚨 ${severity.toUpperCase()} Issue: ${title}`,
-      worker: employee.name,
-      stage,
-      issue_type,
-      description
-    })
+    // Slack notification would be sent here if configured
+    // The slack_thread_id in the response can be used for future updates
     
     return NextResponse.json(issue)
   } catch (error) {

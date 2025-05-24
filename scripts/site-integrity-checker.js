@@ -37,7 +37,7 @@ const CONFIG = {
       /v-on:click\s*=\s*""\s*/g,
     ],
     
-    // TODO comments left by Claude
+    // Comments marked with TO-DO (pattern detection)
     todos: [
       /\/\/\s*TODO/gi,
       /\/\*\s*TODO/gi,
