@@ -30,10 +30,18 @@ function LoginForm() {
       })
     }
 
-    if (error === 'auth_callback_error') {
+    if (error) {
+      const errorMessages = {
+        'auth_callback_error': 'There was an error confirming your email. Please try again.',
+        'exchange_failed': 'Email confirmation failed. The link may have expired.',
+        'no_worker_profile': 'No worker profile found. Please contact your manager.',
+        'otp_expired': 'Email confirmation link has expired. Please register again.',
+        'access_denied': 'Access denied. Please check your email for a new confirmation link.'
+      }
+
       toast({
-        title: 'Confirmation Error',
-        description: 'There was an error confirming your email. Please try again or contact support.',
+        title: 'Authentication Error',
+        description: errorMessages[error as keyof typeof errorMessages] || 'An unexpected error occurred.',
         variant: 'destructive',
       })
     }

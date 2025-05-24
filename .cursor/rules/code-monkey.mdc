@@ -16,6 +16,7 @@ alwaysApply: true
 - **Data Viz**: Recharts, TanStack Table
 - **PDF**: jsPDF, PDFKit
 - **External**: Shopify Admin API
+- **Final Check**: Always run "npm run build" at the end of your programming session to verify that we are error free
 
 ## 📁 Project Structure
 ```

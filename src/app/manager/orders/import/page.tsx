@@ -186,6 +186,48 @@ export default function OrderImportPage() {
     }
   }
 
+  // Quick import single order
+  const importSingleOrder = async (order: ShopifyOrder) => {
+    setImporting(true)
+    
+    try {
+      const response = await fetch('/api/shopify/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          orderId: order.id,
+          lineItemIds: order.line_items.map(item => item.id)
+        })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Import failed')
+      }
+      
+      const result = await response.json()
+      
+      toast({
+        title: 'Order imported',
+        description: `Imported ${result.itemsCreated || 0} items from Order #${order.order_number}`
+      })
+      
+      // Remove this order from available orders
+      setOrders(prev => prev.filter(o => o.id !== order.id))
+      
+    } catch (error) {
+      toast({
+        title: 'Import failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive'
+      })
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const filteredOrders = orders.filter(order => {
     const matchesSearch = filter === '' || 
       order.order_number.toLowerCase().includes(filter.toLowerCase()) ||
@@ -248,6 +290,7 @@ export default function OrderImportPage() {
           <Button 
             onClick={importSelected}
             disabled={importing || getSelectedCount() === 0}
+            className="bg-green-600 hover:bg-green-700"
           >
             {importing ? (
               <>
@@ -263,37 +306,150 @@ export default function OrderImportPage() {
           </Button>
         </div>
       </div>
-
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-4 w-4" />
-            Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Search orders, customers, or products..."
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-              />
+      
+      {/* Quick Import Summary */}
+      {getSelectedCount() > 0 && (
+        <Alert className="border-green-200 bg-green-50">
+          <Package className="h-4 w-4" />
+          <AlertDescription>
+            <strong>{getSelectedCount()} items selected</strong> from {Object.keys(selectedItems).length} orders ready for import.
+            <div className="mt-2 flex gap-2">
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => setSelectedItems({})}
+              >
+                Clear Selection
+              </Button>
+              <Button 
+                size="sm" 
+                onClick={() => {
+                  filteredOrders.forEach(order => {
+                    handleOrderToggle(order.id, true)
+                  })
+                }}
+              >
+                Select All Visible
+              </Button>
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="headphone">Headphones</SelectItem>
-                <SelectItem value="accessory">Accessories</SelectItem>
-                <SelectItem value="cable">Cables</SelectItem>
-                <SelectItem value="electronics">Electronics</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Import Mode & Filters */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Import Modes */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Import Modes
+            </CardTitle>
+            <CardDescription>
+              Choose how you want to import orders
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between p-3 rounded-lg border">
+              <div>
+                <h4 className="font-medium">Single Order Import</h4>
+                <p className="text-sm text-muted-foreground">Import entire orders with one click</p>
+              </div>
+              <Badge variant="outline">Quick Import buttons</Badge>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg border">
+              <div>
+                <h4 className="font-medium">Selective Import</h4>
+                <p className="text-sm text-muted-foreground">Choose specific items from orders</p>
+              </div>
+              <Badge variant="outline">Checkboxes</Badge>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg border">
+              <div>
+                <h4 className="font-medium">Bulk Import</h4>
+                <p className="text-sm text-muted-foreground">Import all visible orders at once</p>
+              </div>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => {
+                  filteredOrders.forEach(order => {
+                    order.line_items.forEach(item => {
+                      handleLineItemToggle(order.id, item.id, true)
+                    })
+                  })
+                }}
+                disabled={importing}
+              >
+                Select All Visible
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Filters */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Filters & Search
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <Input
+                  placeholder="Search orders, customers, or products..."
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                />
+              </div>
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="headphone">Headphones</SelectItem>
+                  <SelectItem value="accessory">Accessories</SelectItem>
+                  <SelectItem value="cable">Cables</SelectItem>
+                  <SelectItem value="electronics">Electronics</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Import Statistics */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div>
+              <p className="text-2xl font-bold text-blue-600">{filteredOrders.length}</p>
+              <p className="text-sm text-muted-foreground">Orders Available</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-green-600">
+                {filteredOrders.reduce((sum, order) => sum + order.line_items.length, 0)}
+              </p>
+              <p className="text-sm text-muted-foreground">Total Items</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-orange-600">{getSelectedCount()}</p>
+              <p className="text-sm text-muted-foreground">Items Selected</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-purple-600">
+                {filteredOrders.reduce((sum, order) => 
+                  sum + order.line_items.filter(item => 
+                    item.headphone_specs.requires_custom_work
+                  ).length, 0
+                )}
+              </p>
+              <p className="text-sm text-muted-foreground">Custom Work Items</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -334,6 +490,19 @@ export default function OrderImportPage() {
                         {order.fulfillment_status}
                       </Badge>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        importSingleOrder(order)
+                      }}
+                      disabled={importing}
+                      className="ml-2"
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      Quick Import
+                    </Button>
                   </div>
                 </div>
               </CardHeader>

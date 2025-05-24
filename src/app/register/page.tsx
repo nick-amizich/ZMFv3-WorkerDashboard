@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
+import { CheckCircle, Mail, Clock } from 'lucide-react'
 import Link from 'next/link'
 
 export default function RegisterPage() {
@@ -15,6 +16,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
+  const [registrationComplete, setRegistrationComplete] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -24,15 +26,15 @@ export default function RegisterPage() {
 
     const supabase = createClient()
     
-    // Get the current origin for redirect URL
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://zmf.randomtask.us'
+    // Always use production URL for email confirmations
+    const redirectTo = 'https://zmf.randomtask.us/auth/callback'
     
     // Create auth user with proper redirect URL
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${origin}/login`
+        emailRedirectTo: redirectTo
       }
     })
 
@@ -69,23 +71,76 @@ export default function RegisterPage() {
         return
       }
 
+      // Show success state instead of redirecting immediately
+      setRegistrationComplete(true)
       toast({
-        title: 'Registration successful',
-        description: 'Please check your email to confirm your account, then wait for manager approval.',
+        title: 'Registration successful!',
+        description: 'Please check your email to confirm your account.',
       })
-      
-      router.push('/login')
     }
 
     setLoading(false)
   }
 
+  // Success state after registration
+  if (registrationComplete) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+            <CardTitle className="text-green-900">Registration Successful!</CardTitle>
+            <CardDescription>Your account has been created</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
+                <Mail className="h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">Check your email</p>
+                  <p className="text-xs text-blue-700">Click the confirmation link we sent to {email}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
+                <Clock className="h-5 w-5 text-yellow-600" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-900">Wait for approval</p>
+                  <p className="text-xs text-yellow-700">A manager will activate your account</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="pt-4 space-y-2">
+              <Button 
+                onClick={() => router.push('/login')} 
+                className="w-full"
+              >
+                Continue to Login
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setRegistrationComplete(false)}
+                className="w-full"
+              >
+                Register Another Account
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Registration form
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Worker Registration</CardTitle>
-          <CardDescription>Create your worker account</CardDescription>
+          <CardDescription>Create your worker account for ZMF</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleRegister} className="space-y-4">
@@ -102,11 +157,11 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Work Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="you@zmfheadphones.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -118,6 +173,7 @@ export default function RegisterPage() {
               <Input
                 id="password"
                 type="password"
+                placeholder="Minimum 6 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -126,7 +182,14 @@ export default function RegisterPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating account...' : 'Register'}
+              {loading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Creating account...</span>
+                </div>
+              ) : (
+                'Create Account'
+              )}
             </Button>
           </form>
           <div className="mt-4 text-center text-sm">

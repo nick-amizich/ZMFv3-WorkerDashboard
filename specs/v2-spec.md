@@ -11,6 +11,278 @@
 ### New Mission Statement
 Enhance the existing worker management system with **customizable** stage-based task assignment, allowing managers to build both automated and manual workflows. Enable time tracking by product groups, issue reporting with Slack integration, and comprehensive production flow tracking for headphone manufacturing.
 
+### App V2 Outline:
+# 🚀 ZMF Worker Management App v2.0 - Implementation Vision & System Design
+
+> **Mission**: Build our internal production management system that transforms how our headphone manufacturing team works together. This is our custom tool that will make production flow seamlessly from wood selection to shipping.
+
+---
+
+## 🎯 **THE BIG PICTURE**
+
+### What We're Building for ZMF
+Our production floor visualization where:
+- **Our Managers** orchestrate production with real-time visibility, building custom workflows for each product line
+- **Our Craftspeople** know exactly what to do next, track their time effortlessly, and communicate issues instantly
+- **Our System** automatically flows work through stages, assigns tasks intelligently, and keeps everyone in sync
+
+This is **OUR** system - built specifically for ZMF's unique production process. Every headphone's journey from raw wood to acoustic perfection is tracked and optimized.
+
+---
+
+## 🎨 **CORE USER EXPERIENCES**
+
+### 🎼 Manager Experience: "The Production Orchestrator"
+
+**Morning Dashboard View**
+When our production manager logs in, they see:
+- **Production Pipeline** - Live Kanban board showing every batch at every stage
+- **Live Metrics** - Orders from Shopify, active workers, yesterday's stats
+- **Alerts Panel** - "3 items in QC for 2+ days", "Walnut batch ready for finishing"
+- **Quick Actions** - "Create Batch", "Assign Work", "Check Issues"
+
+**Workflow Builder - Our Game Changer**
+Creating a special workflow for limited edition models:
+1. Click "Create Workflow" 
+2. Drag stages: `Sanding → Custom Engraving → Finishing → Elite QC → Assembly`
+3. Set "Custom Engraving" to manual (only specific workers)
+4. Set "Elite QC" to require photo documentation
+5. Save as "Limited Edition Workflow"
+6. System automatically routes matching orders through this flow!
+
+**Real-Time Production Control**
+- **Drag & Drop Assignment**: See unassigned batches → drag to worker columns
+- **Stage Transitions**: Click "Advance Stage" and tasks auto-generate
+- **Bottleneck Alerts**: "Finishing station backing up - 5 batches waiting"
+- **Smart Suggestions**: "Based on current pace, assign 2 more to assembly"
+
+### 👷 Worker Experience: "The Craftsperson"
+
+**Mobile-First Task View**
+When our assembly specialist checks their phone:
+- **Active Timer** - Big display showing "Walnut HD650 Batch - 1:34:22"
+- **Current Task Card** - Batch details, stage, special instructions
+- **Quick Actions** - Three big buttons: `Pause Timer` `Report Issue` `Complete Stage`
+- **What's Next** - Preview of upcoming tasks
+
+**Effortless Time Tracking**
+- **One-Tap Start**: Tap batch card → timer starts → start working
+- **Smart Batching**: System groups similar items - "5 Walnut HD650s"
+- **Break Handling**: Tap pause for lunch, resume when back
+- **Automatic Logs**: No manual timesheets
+
+**Issue Reporting in 10 Seconds**
+Spotting a wood defect:
+1. Tap "Report Issue" 
+2. Take photo with phone camera
+3. Select "Material Defect" + "High Severity"
+4. Voice note: "Large knot in walnut cup, might affect acoustics"
+5. Send → Manager notified → Slack post created → Issue logged
+
+### 🔄 The Workflow Engine: "Our Production Brain"
+
+**How Our Automation Works**
+1. **Order Arrives**: New Shopify order for "Walnut HD650"
+2. **Template Matching**: System finds "Standard Headphone Workflow"
+3. **Batch Creation**: Groups with other walnut orders
+4. **Task Generation**: Creates sanding task, assigns to available sander
+5. **Worker Notification**: Push notification to assigned worker
+6. **Progress Tracking**: Completion triggers next stage
+7. **Smart Routing**: Routes based on workflow rules
+8. **Completion Chain**: Each stage triggers the next
+
+**Manual Override Power**
+- Managers can intervene: "Route this to premium QC"
+- Workers can flag: "Needs manager review"
+- Workflows can pause: "Wait for customer approval"
+
+---
+
+## 💡 **KEY SYSTEM BEHAVIORS**
+
+### Intelligent Task Assignment
+```
+Our Assignment Logic:
+1. Check worker skills for stage
+2. Calculate current workload
+3. Consider historical performance
+4. Apply assignment rule:
+   - Least Busy: Lightest current load
+   - Round Robin: Fair distribution
+   - Specialized: Only certified workers
+   - Manual: Manager decides
+```
+
+### Batch Intelligence
+```
+Our Batching Rules:
+- Same model + same wood = automatic batch
+- Custom: "All cable orders together"
+- Priority: "Rush orders process individually"
+- Smart splitting: "Batch of 20 splits into 4x5"
+```
+
+### Real-Time Synchronization
+```
+What Updates Live:
+- Worker starts task → Status changes everywhere
+- Issue reported → Manager dashboard alert
+- Stage completed → Next worker notified
+- Shopify order → Appears in queue
+```
+
+---
+
+## 🎭 **CRITICAL USER FLOWS**
+
+### Flow 1: Order to Shipment
+```
+1. Shopify → Order syncs → "New Orders" queue
+2. Manager → Reviews → Creates batch or individual
+3. System → Matches workflow → Generates tasks
+4. Worker → Sees task → Starts timer → Completes
+5. System → Auto-transitions → Next stage
+6. Repeat → Through all stages → Final QC
+7. Manager → Marks shipped → Shopify updated
+```
+
+### Flow 2: Custom Workflow Creation
+```
+1. Manager → "New Workflow" → Visual builder
+2. Drag stages → Connect → Configure each
+3. Set triggers → "Use for: Ebony + Auteur"
+4. Test run → Preview with sample
+5. Activate → System routes matching orders
+6. Monitor → Dashboard shows performance
+```
+
+### Flow 3: Issue Resolution
+```
+1. Worker → Spots defect → Photo + description
+2. System → Slack post → Database log → Alert
+3. Manager → Reviews → Assigns specialist
+4. Specialist → Fixes → Logs resolution
+5. System → Updates → Notifies worker
+6. Work continues → Full audit trail
+```
+
+---
+
+## 🎨 **UI/UX EXCELLENCE**
+
+### Our Design Principles
+1. **Mobile-First Workers**: Every worker screen phone-optimized
+2. **Data-Rich Manager Views**: Dense info without clutter
+3. **Progressive Disclosure**: Basic obvious, advanced discoverable
+4. **Consistent Patterns**: Same actions everywhere
+5. **Delightful Details**: Smooth animations, satisfying feedback
+
+### Key Interfaces
+
+**Manager Dashboard**
+- **Header**: Live stats (Orders: 47 | Workers: 12 | Complete: 23)
+- **Main**: Kanban board with workflow swimlanes
+- **Sidebar**: Filters, worker list, recent issues
+- **Footer**: Bulk actions toolbar
+
+**Worker Mobile**
+- **Top**: Timer display (always visible)
+- **Main**: Current task with context
+- **Actions**: 3-4 primary actions max
+- **Gesture**: Pull to refresh assignments
+
+**Workflow Builder**
+- **Left**: Stage library (drag source)
+- **Canvas**: Visual workflow diagram
+- **Right**: Selected stage properties
+- **Top**: Save, Test, Publish
+
+---
+
+## 🔥 **WHAT MAKES THIS PERFECT FOR US**
+
+### For Our Managers
+- **Complete Visibility**: See every order, worker, bottleneck
+- **Build Any Workflow**: Handle special editions, custom orders
+- **Smart Automation**: Routine tasks handled, control maintained
+- **Prevent Problems**: Spot issues before they delay orders
+
+### For Our Workers  
+- **Clear Direction**: Always know what's next
+- **Natural Time Tracking**: Integrated into work, not separate
+- **Quick Communication**: Report issues in seconds
+- **See Progress**: Track completions, contributions
+
+### For ZMF Business
+- **Scale Smoothly**: Handle growth without chaos
+- **Data-Driven**: Know where time goes, what works
+- **Quality Built-In**: QC steps, tracking, audit trails
+- **Happy Team**: Less frustration, more craft focus
+
+---
+
+## 🚀 **IMPLEMENTATION PRIORITIES**
+
+### Phase 1: Core Flow (Make it Work)
+1. Worker task view with timer
+2. Basic manager dashboard  
+3. Simple workflow (standard headphones)
+4. Manual task assignment
+5. Basic issue reporting
+
+### Phase 2: Intelligence (Make it Smart)
+1. Automated assignment rules
+2. Workflow builder UI
+3. Batch management
+4. Slack integration
+5. Real-time updates
+
+### Phase 3: Excellence (Make it Shine)
+1. Production analytics
+2. Mobile optimization
+3. Custom stages for special processes
+4. Predictive insights
+5. Extended integrations
+
+---
+
+## 💭 **DEVELOPMENT PHILOSOPHY**
+
+This system is about **our people**, not just tasks. Every feature should:
+- Remove friction from daily work
+- Provide clarity in complex production  
+- Automate routine so we focus on craft
+- Build trust through transparency
+
+When implementing, always ask:
+1. "Will our workers find this intuitive?"
+2. "Does this give our managers needed control?"
+3. "Will this scale as we grow?"
+4. "Does this make work more rewarding?"
+
+---
+
+## 🎸 **ZMF SPECIFIC FEATURES**
+
+### Our Unique Needs
+- **Wood Tracking**: Group by wood type for finishing efficiency
+- **Acoustic Testing Stage**: Special handling for measurements
+- **Customer Communications**: Some orders need approval checkpoints
+- **Limited Editions**: Special workflows for unique builds
+- **Quality Photos**: Document special finishes and custom work
+
+### Our Workflow Examples
+
+**Standard Headphone**
+`Sanding → Finishing → Assembly → Initial QC → Acoustic Testing → Final QC → Packaging → Shipping`
+
+
+**Cable/Accessory**
+`Preparation → Assembly → Testing → Packaging → Shipping`
+
+---
+
+
 ### New Core Business Requirements
 - **Customizable Workflows**: Managers can build workflows with automatic or manual task generation ✅
 - **Workflow Builder**: Visual interface for managers to create/edit production workflows 🔄
@@ -791,21 +1063,31 @@ const FEATURE_FLAGS = {
 
 ## 🎯 **NEXT DEVELOPMENT PRIORITIES**
 
-### Phase 1: Complete API Layer 🔄
-1. **Remaining Workflow API endpoints**:
-   - PUT /api/workflows/[id] (update workflows)
-   - POST /api/workflows/[id]/duplicate (clone workflows) 
-   - GET /api/workflows/[id]/preview (preview with sample data)
+### ✅ Phase 1: Complete API Layer (COMPLETED!)
+1. **Workflow API endpoints** ✅:
+   - PUT /api/workflows/[id] (update workflows) ✅
+   - POST /api/workflows/[id]/duplicate (clone workflows) ✅
+   - GET /api/workflows/[id]/preview (preview with sample data) ✅
 
-2. **Remaining Batch API endpoints**:
-   - POST /api/batches/[id]/assign-workflow
-   - POST /api/batches/[id]/generate-tasks
+2. **Batch API endpoints** ✅:
+   - POST /api/batches/[id]/assign-workflow ✅
+   - POST /api/batches/[id]/generate-tasks ✅
+
+**Total: 18 API endpoints completed!** 🚀
 
 ### Phase 2: UI Components 🔄
-1. **Manager Workflow Builder** - Visual workflow designer
-2. **Enhanced Production Flow Board** - With workflow context
-3. **Worker Task View Enhancement** - Show workflow progress
-4. **Issue Reporting Modal** - With workflow context
+1. **Manager Workflow Builder** - Visual workflow designer ✅ COMPLETED!
+   - ✅ Drag-and-drop stage library with 8 standard stages
+   - ✅ Visual workflow canvas with horizontal flow design
+   - ✅ Stage configuration dialog (automation, timing, skills)
+   - ✅ Real-time workflow statistics (automation %, total hours)
+   - ✅ Workflow preview with sample data and recommendations
+   - ✅ Full CRUD operations (create, edit, duplicate, activate/deactivate)
+   - ✅ Beautiful modern UI with cards, badges, and smooth animations
+
+2. **Enhanced Production Flow Board** - With workflow context 🔄
+3. **Worker Task View Enhancement** - Show workflow progress 🔄
+4. **Issue Reporting Modal** - With workflow context 🔄
 
 ### Phase 3: Advanced Features 🔄  
 1. **Slack Integration** - Auto-post issues and notifications
@@ -822,3 +1104,5 @@ const FEATURE_FLAGS = {
 ---
 
 **This specification documents the current implementation status of v2.0 with a flexible workflow system that supports both automated and manual processes, allowing managers to build custom workflows without developer intervention. The foundation is solid with comprehensive API coverage and database schema complete. UI development is the next major milestone.**
+
+**Let's build our perfect production system! 🎸🎨✨**

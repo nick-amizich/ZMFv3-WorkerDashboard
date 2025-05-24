@@ -21,8 +21,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
-    // Fetch tasks with related data
-    const { data: tasks, error: tasksError } = await supabase
+    // Parse query parameters
+    const url = new URL(request.url)
+    const batchId = url.searchParams.get('batch_id')
+    const assignedToId = url.searchParams.get('assigned_to_id')
+    const status = url.searchParams.get('status')
+    const stage = url.searchParams.get('stage')
+    
+    // Build query with optional filters
+    let query = supabase
       .from('work_tasks')
       .select(`
         *,
@@ -38,14 +45,41 @@ export async function GET(request: NextRequest) {
           name
         )
       `)
-      .order('created_at', { ascending: false })
+    
+    // Apply filters
+    if (batchId) {
+      query = query.eq('batch_id', batchId)
+    }
+    if (assignedToId) {
+      query = query.eq('assigned_to_id', assignedToId)
+    }
+    if (status) {
+      query = query.eq('status', status)
+    }
+    if (stage) {
+      query = query.eq('stage', stage)
+    }
+    
+    // Order results
+    query = query.order('created_at', { ascending: false })
+    
+    const { data: tasks, error: tasksError } = await query
     
     if (tasksError) {
       console.error('Error fetching tasks:', tasksError)
       return NextResponse.json({ error: 'Failed to fetch tasks' }, { status: 500 })
     }
     
-    return NextResponse.json(tasks || [])
+    return NextResponse.json({ 
+      tasks: tasks || [],
+      filters: {
+        batch_id: batchId,
+        assigned_to_id: assignedToId,
+        status,
+        stage
+      },
+      total: tasks?.length || 0
+    })
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

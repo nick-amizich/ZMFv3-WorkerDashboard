@@ -1,4 +1,60 @@
-# Deployment Checklist for Vercel
+# 🚀 Deployment Checklist
+
+## ✅ Environment Variables (Vercel)
+```bash
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://kjdicpudxqxenhjwdrzg.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Application
+NODE_ENV=production
+```
+
+## ⚠️ **CRITICAL: Supabase Project Configuration**
+
+### **MUST UPDATE BEFORE PRODUCTION:**
+
+1. **Go to Supabase Dashboard** → Your Project → Settings → General
+2. **Update Site URL** from `http://localhost:3000` to `https://zmf.randomtask.us`
+3. **Update Redirect URLs** to include:
+   - `https://zmf.randomtask.us/auth/callback`
+   - `https://zmf.randomtask.us/login`
+
+### **Authentication Settings:**
+- Site URL: `https://zmf.randomtask.us`
+- Additional redirect URLs:
+  - `https://zmf.randomtask.us/auth/callback`
+  - `https://zmf.randomtask.us/login`
+  - `https://zmf.randomtask.us/manager`
+  - `https://zmf.randomtask.us/worker`
+
+## 🔐 Database Migration Status
+- ✅ RLS enabled on all tables
+- ✅ V2.0 workflow system migrated
+- ✅ Worker permissions configured
+- ✅ Default workflow template created
+
+## 🌐 Vercel Deployment
+- ✅ Connected to GitHub
+- ✅ Auto-deploy on push to main
+- ✅ Environment variables configured
+- ✅ Domain configured: zmf.randomtask.us
+
+## 🧪 Post-Deployment Testing
+- [ ] Registration flow with email confirmation
+- [ ] Login with existing accounts
+- [ ] Manager dashboard access
+- [ ] Worker dashboard access
+- [ ] API endpoints responding correctly
+
+## 🚨 **If Email Links Still Redirect to Localhost:**
+This means the Supabase Site URL is still set to localhost. You MUST update it in:
+**Supabase Dashboard → Project Settings → General → Site URL**
+
+---
+
+**After updating Supabase settings, test the registration flow again to confirm email links work correctly.**
 
 ## Pre-deployment
 

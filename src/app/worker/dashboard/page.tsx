@@ -1,11 +1,11 @@
 'use client'
 
-import { WorkerTaskList } from '@/components/worker/task-list'
+import { EnhancedWorkerTaskList } from '@/components/worker/enhanced-task-list'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/toaster'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useEffect, useState } from 'react'
-import { ClipboardList, Clock, CheckCircle, AlertCircle } from 'lucide-react'
+import { ClipboardList, Clock, CheckCircle, AlertCircle, Workflow } from 'lucide-react'
 
 const queryClient = new QueryClient()
 
@@ -101,10 +101,13 @@ export default function WorkerDashboard() {
           </Card>
         </div>
 
-        {/* Task List */}
+        {/* Enhanced Task List with Workflow Context */}
         <div>
-          <h3 className="text-lg font-semibold mb-4">Your Tasks</h3>
-          <WorkerTaskList workerId={worker.id} />
+          <div className="flex items-center space-x-2 mb-4">
+            <Workflow className="h-5 w-5 text-blue-600" />
+            <h3 className="text-lg font-semibold">Your Tasks & Workflows</h3>
+          </div>
+          <EnhancedWorkerTaskList workerId={worker.id} />
         </div>
       </div>
       <Toaster />

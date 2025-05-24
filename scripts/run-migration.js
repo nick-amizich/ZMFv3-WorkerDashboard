@@ -1,8 +1,16 @@
 const { createClient } = require('@supabase/supabase-js')
 
 // Get credentials from environment
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://kjdicpudxqxenhjwdrzg.supabase.co'
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqZGljcHVkeHF4ZW5oandkcnpnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODAzMDEwMywiZXhwIjoyMDYzNjA2MTAzfQ.YaE54jjrZdJ8URdHHuzgIJnClKFENRo7QbGnyJdIsww'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('❌ Missing required environment variables:')
+  console.error('- NEXT_PUBLIC_SUPABASE_URL')
+  console.error('- SUPABASE_SERVICE_ROLE_KEY')
+  console.error('Please set these in your .env.local file')
+  process.exit(1)
+}
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
