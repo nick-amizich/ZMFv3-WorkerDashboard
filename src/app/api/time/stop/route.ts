@@ -1,0 +1,108 @@
+import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error } = await supabase.auth.getUser()
+    
+    if (error || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    // Get worker details
+    const { data: worker } = await supabase
+      .from('workers')
+      .select('id, is_active')
+      .eq('auth_user_id', user.id)
+      .single()
+    
+    if (!worker?.is_active) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    
+    const body = await request.json()
+    const { time_log_id, notes } = body
+    
+    // If time_log_id is provided, use it; otherwise find the active timer
+    let timeLogId = time_log_id
+    
+    if (!timeLogId) {
+      // Find the worker's active timer
+      const { data: activeTimer } = await supabase
+        .from('time_logs')
+        .select('id')
+        .eq('worker_id', worker.id)
+        .is('end_time', null)
+        .single()
+      
+      if (!activeTimer) {
+        return NextResponse.json({ 
+          error: 'No active timer found' 
+        }, { status: 404 })
+      }
+      
+      timeLogId = activeTimer.id
+    }
+    
+    // Verify the time log belongs to this worker
+    const { data: timeLog } = await supabase
+      .from('time_logs')
+      .select('id, worker_id, start_time, end_time')
+      .eq('id', timeLogId)
+      .single()
+    
+    if (!timeLog) {
+      return NextResponse.json({ 
+        error: 'Timer not found' 
+      }, { status: 404 })
+    }
+    
+    if (timeLog.worker_id !== worker.id) {
+      return NextResponse.json({ 
+        error: 'Timer does not belong to you' 
+      }, { status: 403 })
+    }
+    
+    if (timeLog.end_time) {
+      return NextResponse.json({ 
+        error: 'Timer is already stopped' 
+      }, { status: 400 })
+    }
+    
+    // Stop the timer
+    const { data: updatedTimeLog, error: updateError } = await supabase
+      .from('time_logs')
+      .update({
+        end_time: new Date().toISOString(),
+        notes
+      })
+      .eq('id', timeLogId)
+      .select(`
+        *,
+        task:work_tasks(
+          id,
+          task_description,
+          order_item:order_items(
+            product_name,
+            order:orders(order_number)
+          )
+        ),
+        batch:work_batches(
+          id,
+          name
+        )
+      `)
+      .single()
+    
+    if (updateError) {
+      console.error('Error stopping timer:', updateError)
+      return NextResponse.json({ error: 'Failed to stop timer' }, { status: 500 })
+    }
+    
+    return NextResponse.json(updatedTimeLog)
+  } catch (error) {
+    console.error('API Error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+} 

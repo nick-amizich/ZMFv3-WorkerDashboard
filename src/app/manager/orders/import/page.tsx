@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -56,11 +56,7 @@ export default function OrderImportPage() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const { toast } = useToast()
 
-  useEffect(() => {
-    fetchOrders()
-  }, [])
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true)
     try {
       const response = await fetch('/api/shopify/sync', {
@@ -89,7 +85,11 @@ export default function OrderImportPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    fetchOrders()
+  }, [fetchOrders])
 
   const handleLineItemToggle = (orderId: number, lineItemId: number, checked: boolean) => {
     setSelectedItems(prev => {
@@ -396,7 +396,7 @@ export default function OrderImportPage() {
                               </div>
                               {lineItem.headphone_specs.custom_engraving && (
                                 <div className="text-orange-600 font-medium">
-                                  Custom Engraving: "{lineItem.headphone_specs.custom_engraving}"
+                                  Custom Engraving: &quot;{lineItem.headphone_specs.custom_engraving}&quot;
                                 </div>
                               )}
                             </div>

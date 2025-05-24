@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -69,7 +69,7 @@ export default function OrdersPage() {
   const [lastSyncResult, setLastSyncResult] = useState<any>(null)
   const { toast } = useToast()
   
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       const response = await fetch('/api/orders')
       if (!response.ok) throw new Error('Failed to fetch orders')
@@ -92,11 +92,11 @@ export default function OrdersPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
   
   useEffect(() => {
     fetchOrders()
-  }, [])
+  }, [fetchOrders])
   
   const handleSync = async () => {
     setSyncing(true)
