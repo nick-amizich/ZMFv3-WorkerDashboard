@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, is_active, name')
+      .select('id, active, name')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
         ),
         task:work_tasks(
           id,
-          task_description,
+          custom_notes,
           order_item:order_items(
             product_name,
             order:orders(order_number)

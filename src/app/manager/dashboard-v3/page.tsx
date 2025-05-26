@@ -243,15 +243,15 @@ export default function EnhancedManagerDashboard() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Brain className="h-5 w-5 text-purple-500" />
-                  Tasks
+                  Components
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Manage tasks
+                  Track components
                 </p>
                 <Button asChild className="w-full" variant="outline">
-                  <Link href="/manager/tasks">Manage</Link>
+                  <Link href="/manager/components">Track</Link>
                 </Button>
               </CardContent>
             </Card>

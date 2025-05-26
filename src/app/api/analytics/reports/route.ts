@@ -249,11 +249,11 @@ async function generateSummarySection(
       
       case 'activeWorkers':
         const workers = await supabase
-          .from('time_logs')
-          .select('worker_id')
+          .from('work_logs')
+          .select('employee_id')
           .gte('start_time', filters.dateRange.start)
           .lte('start_time', filters.dateRange.end)
-        const uniqueWorkers = new Set(workers.data?.map((w: any) => w.worker_id))
+        const uniqueWorkers = new Set(workers.data?.map((w: any) => w.employee_id))
         summary.activeWorkers = uniqueWorkers.size
         break
       
@@ -334,15 +334,19 @@ async function generateTimeSeriesSection(
           break
         
         case 'hoursWorked':
-          const timeLogs = await supabase
-            .from('time_logs')
-            .select('duration_minutes')
+          const workLogs = await supabase
+            .from('work_logs')
+            .select('start_time, end_time')
             .gte('start_time', dayStart.toISOString())
             .lt('start_time', dayEnd.toISOString())
-            .not('duration_minutes', 'is', null)
+            .not('end_time', 'is', null)
           
-          const totalMinutes = timeLogs.data?.reduce((sum: number, log: any) => 
-            sum + (log.duration_minutes || 0), 0) || 0
+          const totalMinutes = workLogs.data?.reduce((sum: number, log: any) => {
+            const start = new Date(log.start_time)
+            const end = new Date(log.end_time)
+            const minutes = (end.getTime() - start.getTime()) / (1000 * 60)
+            return sum + minutes
+          }, 0) || 0
           dayData.hoursWorked = (totalMinutes / 60).toFixed(1)
           break
       }
@@ -387,7 +391,7 @@ async function generateBreakdownSection(
   
   return Object.entries(breakdownData).map(([key, value]) => ({
     [section.groupBy || 'key']: key,
-    ...(typeof value === 'object' && value !== null ? value : { value })
+    ...(value as Record<string, any>)
   }))
 }
 
@@ -413,27 +417,31 @@ async function generateListSection(
   switch (section.metrics[0]) {
     case 'topWorkers':
       const workers = await supabase
-        .from('time_logs')
+        .from('work_logs')
         .select(`
-          worker_id,
-          duration_minutes,
-          worker:workers(name)
+          employee_id,
+          start_time,
+          end_time,
+          employee:workers(name)
         `)
         .gte('start_time', filters.dateRange.start)
         .lte('start_time', filters.dateRange.end)
-        .not('duration_minutes', 'is', null)
+        .not('end_time', 'is', null)
       
       const workerTotals: any = {}
       workers.data?.forEach((log: any) => {
-        const id = log.worker_id
+        const id = log.employee_id
         if (!workerTotals[id]) {
           workerTotals[id] = {
-            name: log.worker?.name || 'Unknown',
+            name: log.employee?.name || 'Unknown',
             totalMinutes: 0,
             totalHours: 0
           }
         }
-        workerTotals[id].totalMinutes += log.duration_minutes
+        const start = new Date(log.start_time)
+        const end = new Date(log.end_time)
+        const minutes = (end.getTime() - start.getTime()) / (1000 * 60)
+        workerTotals[id].totalMinutes += minutes
       })
       
       return Object.entries(workerTotals)

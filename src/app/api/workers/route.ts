@@ -1,41 +1,57 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { ApiLogger } from '@/lib/api-logger'
 
 export async function GET(request: NextRequest) {
+  const logContext = ApiLogger.logRequest(request)
+  
   try {
     const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
     
     if (error || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      ApiLogger.logResponse(logContext, response, 'Unauthorized access to workers endpoint')
+      return response
     }
     
-    // ALWAYS validate employee status
-    const { data: currentWorker } = await supabase
+    // Validate user is approved and active
+    const { data: currentUser } = await supabase
       .from('workers')
-      .select('role, is_active')
+      .select('role, is_active, approval_status')
       .eq('auth_user_id', user.id)
       .single()
     
-    if (!currentWorker?.is_active || !['manager', 'supervisor'].includes(currentWorker.role || '')) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    if (!currentUser?.is_active || currentUser.approval_status !== 'approved') {
+      const response = NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      ApiLogger.logResponse(logContext, response, 'Inactive or unapproved user attempted access')
+      return response
     }
     
-    // Fetch all active workers
+    // Get all active, approved workers
     const { data: workers, error: workersError } = await supabase
       .from('workers')
-      .select('*')
+      .select('id, name, email, role, skills, is_active, approval_status')
       .eq('is_active', true)
-      .order('name')
+      .eq('approval_status', 'approved')
+      .order('name', { ascending: true })
     
     if (workersError) {
-      console.error('Error fetching workers:', workersError)
-      return NextResponse.json({ error: 'Failed to fetch workers' }, { status: 500 })
+      throw workersError
     }
     
-    return NextResponse.json(workers || [])
+    const response = NextResponse.json(workers || [])
+    
+    ApiLogger.logResponse(logContext, response, `Retrieved ${workers?.length || 0} active workers`)
+    return response
+    
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('Workers API error:', error)
+    const errorResponse = NextResponse.json(
+      { error: 'Internal server error' }, 
+      { status: 500 }
+    )
+    ApiLogger.logResponse(logContext, errorResponse, 'Workers API internal error')
+    return errorResponse
   }
-}
+} 

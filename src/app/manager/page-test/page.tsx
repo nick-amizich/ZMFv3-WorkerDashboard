@@ -134,7 +134,7 @@ export default function PageTestPage() {
                 <CardDescription>{page.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <Link href={page.href as any}>
+                <Link href={page.href}>
                   <Button className="w-full">
                     Visit Page
                   </Button>

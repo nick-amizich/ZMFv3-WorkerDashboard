@@ -38,6 +38,11 @@ const navigationItems = [
     icon: Users,
   },
   {
+    name: 'Components',
+    href: '/manager/components' as const,
+    icon: QrCode,
+  },
+  {
     name: 'Workflows',
     href: '/manager/workflows' as const,
     icon: Bot,
@@ -46,6 +51,11 @@ const navigationItems = [
     name: 'Analytics',
     href: '/manager/analytics' as const,
     icon: BarChart3,
+  },
+  {
+    name: 'Quality',
+    href: '/manager/quality' as const,
+    icon: Shield,
   },
   {
     name: 'Quality Holds',
@@ -81,6 +91,11 @@ const navigationItems = [
     name: 'Import Status',
     href: '/manager/import-status' as const,
     icon: Activity,
+  },
+  {
+    name: 'Workflow Test',
+    href: '/manager/workflow-test' as const,
+    icon: FlaskConical,
   },
 ]
 

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     // ALWAYS validate employee status
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, is_active')
+      .select('id, role, active')
       .eq('auth_user_id', user.id)
       .single()
     

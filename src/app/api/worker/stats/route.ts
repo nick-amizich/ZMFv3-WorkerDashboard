@@ -28,7 +28,7 @@ export async function GET() {
         .from('work_tasks')
         .select('id', { count: 'exact', head: true })
         .eq('assigned_to_id', worker.id)
-        .neq('status', 'cancelled'),
+        .neq('status', 'failed_qc'),
       
       // In progress tasks
       supabase
@@ -50,9 +50,9 @@ export async function GET() {
         .from('work_tasks')
         .select('id', { count: 'exact', head: true })
         .eq('assigned_to_id', worker.id)
-        .eq('priority', 'urgent')
+        .eq('priority', 3)
         .neq('status', 'completed')
-        .neq('status', 'cancelled')
+        .neq('status', 'failed_qc')
     ])
     
     return NextResponse.json({

@@ -16,7 +16,7 @@ export async function POST(
     // ALWAYS validate employee status
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, is_active')
+      .select('id, role, active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -83,10 +83,10 @@ export async function POST(
           .from('worker_stage_assignments')
           .select(`
             worker_id,
-            worker:workers(id, name, is_active)
+            worker:workers(id, name, active)
           `)
           .eq('stage', targetStage)
-          .eq('is_active', true)
+          .eq('active', true)
         
         if (workersError) {
           console.error('Error fetching available workers:', workersError)

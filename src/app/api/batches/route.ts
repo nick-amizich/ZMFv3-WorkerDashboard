@@ -55,18 +55,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch batches' }, { status: 500 })
     }
     
-    // For each batch, fetch the order items separately
+    // For each batch, fetch the order items that belong to it
     const batchesWithItems = await Promise.all(
       (batches || []).map(async (batch) => {
-        if (!batch.order_item_ids || batch.order_item_ids.length === 0) {
-          return { ...batch, order_items: [] }
-        }
-        
         const { data: orderItems } = await supabase
           .from('order_items')
           .select(`
             id,
-            product_name,
+            title,
             quantity,
             sku,
             orders!inner(
@@ -74,7 +70,7 @@ export async function GET(request: NextRequest) {
               customer_name
             )
           `)
-          .in('id', batch.order_item_ids)
+          .eq('batch_id', batch.id)
         
         return {
           ...batch,
@@ -102,7 +98,7 @@ export async function POST(request: NextRequest) {
     // Validate employee status and role
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, is_active')
+      .select('id, role, active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -141,7 +137,7 @@ export async function POST(request: NextRequest) {
     // Verify all order items exist
     const { data: orderItems, error: orderItemsError } = await supabase
       .from('order_items')
-      .select('id, product_name')
+      .select('id, title')
       .in('id', order_item_ids)
     
     if (orderItemsError) {
@@ -160,15 +156,18 @@ export async function POST(request: NextRequest) {
       .from('work_batches')
       .insert({
         name,
-        batch_type,
-        order_item_ids,
-        workflow_template_id,
-        criteria,
+        created_by: worker.id,
+        workflow_id: workflow_template_id,
+        metadata: {
+          batch_type,
+          order_item_ids,
+          criteria
+        },
         status: 'pending'
       })
       .select(`
         *,
-        workflow_template:workflow_templates(
+        workflow:workflows(
           id,
           name,
           description
@@ -181,14 +180,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create batch' }, { status: 500 })
     }
     
-    // Fetch the order items separately
-    let batchWithItems: any = { ...batch, order_items: [] }
+    // Update order items to associate them with this batch
     if (batch && order_item_ids.length > 0) {
+      await supabase
+        .from('order_items')
+        .update({ batch_id: batch.id })
+        .in('id', order_item_ids)
+      
+      // Fetch the updated order items
       const { data: orderItemsData } = await supabase
         .from('order_items')
         .select(`
           id,
-          product_name,
+          title,
           quantity,
           sku,
           orders!inner(
@@ -196,12 +200,12 @@ export async function POST(request: NextRequest) {
             customer_name
           )
         `)
-        .in('id', order_item_ids)
+        .eq('batch_id', batch.id)
       
-      batchWithItems.order_items = orderItemsData || []
+      batch.order_items = orderItemsData || []
     }
     
-    return NextResponse.json(batchWithItems)
+    return NextResponse.json(batch)
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

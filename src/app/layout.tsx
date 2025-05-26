@@ -7,6 +7,9 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "ZMF Worker Dashboard",
   description: "Production-ready worker task management system for headphone manufacturing",
+  icons: {
+    icon: '/favicon.svg',
+  },
 }
 
 export default function RootLayout({

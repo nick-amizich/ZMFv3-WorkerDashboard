@@ -16,7 +16,7 @@ export async function GET(
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, is_active')
+      .select('id, role, active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -39,68 +39,97 @@ export async function GET(
       }, { status: 404 })
     }
     
+    // Get tasks for this batch
+    const { data: tasks } = await supabase
+      .from('work_tasks')
+      .select('id')
+      .eq('batch_id', batchId)
+    
+    const taskIds = tasks?.map(t => t.id) || []
+    
+    if (taskIds.length === 0) {
+      return NextResponse.json({
+        batch: {
+          id: batch.id,
+          name: batch.name
+        },
+        time_logs: [],
+        summary: {
+          total_logs: 0,
+          completed_logs: 0,
+          active_logs: 0,
+          total_minutes: 0,
+          total_hours: 0,
+          average_minutes_per_log: 0
+        }
+      })
+    }
+    
     // Get URL parameters
     const url = new URL(request.url)
     const workerId = url.searchParams.get('worker_id')
-    const stage = url.searchParams.get('stage')
     const includeActive = url.searchParams.get('include_active') === 'true'
     
-    // Build query
+    // Build query for work logs related to batch tasks
     let query = supabase
-      .from('time_logs')
+      .from('work_logs')
       .select(`
         *,
-        worker:workers(
+        employee:workers(
           id,
           name
         ),
         task:work_tasks(
           id,
-          task_description,
+          custom_notes,
           order_item:order_items(
             product_name,
             order:orders(order_number, customer_name)
           )
         )
       `)
-      .eq('batch_id', batchId)
+      .in('task_id', taskIds)
       .order('start_time', { ascending: false })
     
     // Apply filters
     if (workerId) {
-      query = query.eq('worker_id', workerId)
-    }
-    
-    if (stage) {
-      query = query.eq('stage', stage)
+      query = query.eq('employee_id', workerId)
     }
     
     if (!includeActive) {
       query = query.not('end_time', 'is', null)
     }
     
-    // Workers can only see their own time logs unless they're managers
+    // Workers can only see their own work logs unless they're managers
     if (worker.role === 'worker') {
-      query = query.eq('worker_id', worker.id)
+      query = query.eq('employee_id', worker.id)
     }
     
-    const { data: timeLogs, error: timeLogsError } = await query
+    const { data: workLogs, error: workLogsError } = await query
     
-    if (timeLogsError) {
-      console.error('Error fetching batch time logs:', timeLogsError)
-      return NextResponse.json({ error: 'Failed to fetch time logs' }, { status: 500 })
+    if (workLogsError) {
+      console.error('Error fetching batch work logs:', workLogsError)
+      return NextResponse.json({ error: 'Failed to fetch work logs' }, { status: 500 })
     }
     
     // Calculate summary statistics
-    const completedLogs = timeLogs?.filter(log => log.end_time) || []
-    const totalMinutes = completedLogs.reduce((sum, log) => sum + (log.duration_minutes || 0), 0)
-    const activeLogs = timeLogs?.filter(log => !log.end_time) || []
+    const completedLogs = workLogs?.filter(log => log.end_time) || []
+    const totalMinutes = completedLogs.reduce((sum, log) => {
+      if (log.start_time && log.end_time) {
+        const start = new Date(log.start_time)
+        const end = new Date(log.end_time)
+        const minutes = (end.getTime() - start.getTime()) / (1000 * 60)
+        return sum + minutes
+      }
+      return sum
+    }, 0)
+    const activeLogs = workLogs?.filter(log => !log.end_time) || []
     
     const summary = {
-      total_logs: timeLogs?.length || 0,
+      total_logs: workLogs?.length || 0,
       completed_logs: completedLogs.length,
       active_logs: activeLogs.length,
-      total_minutes: totalMinutes,
+      total_minutes: Math.round(totalMinutes * 100) / 100,
       total_hours: Math.round((totalMinutes / 60) * 100) / 100,
       average_minutes_per_log: completedLogs.length > 0 ? Math.round((totalMinutes / completedLogs.length) * 100) / 100 : 0
     }
@@ -110,7 +139,7 @@ export async function GET(
         id: batch.id,
         name: batch.name
       },
-      time_logs: timeLogs || [],
+      time_logs: workLogs || [],
       summary
     })
   } catch (error) {

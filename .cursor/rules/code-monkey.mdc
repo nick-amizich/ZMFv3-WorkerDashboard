@@ -3,283 +3,178 @@ description:
 globs: 
 alwaysApply: true
 ---
-# ZMFv2 Development Rules
+ZMFv2 Development Rules
+Project: Headphone manufacturing company backend
+Stack: Next.js 15.3.2 + Supabase + TypeScript + React 18.2.0
 
-**Project**: Headphone manufacturing company backend  
-**Stack**: Next.js 14+ + Supabase + TypeScript + Employee management
+🚨 CRITICAL: Ask for Clarification
+If any requirement is unclear or seems to conflict with existing patterns, STOP and ASK before implementing. Better to clarify than to build the wrong thing.
 
-## 📋 Tech Stack Details
-- **Frontend**: Next.js 15.3.2, React 18.2.0, TypeScript 5
-- **UI**: Tailwind CSS v4, shadcn/ui, Radix UI
-- **Backend**: Supabase (PostgreSQL, Auth, Realtime)
-- **Forms**: React Hook Form + Zod validation
-- **Data Viz**: Recharts, TanStack Table
-- **PDF**: jsPDF, PDFKit
-- **External**: Shopify Admin API
-- **Final Check**: Always run "npm run build" at the end of your programming session to verify that we are error free
 
-## 📁 Project Structure
-```
-specs/                 # Project specifications
-src/lib/supabase/     # Auth utilities
-src/app/api/          # API routes
-src/components/       # UI components
-src/app/worker/       # Worker dashboard
-src/app/admin/        # Admin tools
-supabase/             # Database schema
-src/hooks/            # Custom React hooks
-src/types/            # TypeScript type definitions
-src/features/         # Feature modules
-```
+Do not run any dev servers, I will hand that when testing so no need. I am talking npm run dev commands
 
-## 🔐 Authentication (Critical)
-- **ALWAYS** use `@supabase/ssr` (never `@supabase/auth-helpers-nextjs`)
-- **Server components**: Use `createClient()` from `@/lib/supabase/server`
-- **Client components**: Use `createClient()` from `@/lib/supabase/client`
-- **Server-side**: Always use `getUser()`, never `getSession()`
-- **Validation chain**: auth → employee status → role permissions
-- **RLS**: All tables must have Row Level Security enabled
-
-## 🏗️ Component Patterns
-
-### Server Components (Default)
-```typescript
+📋 Core Stack
+Frontend: Next.js 15.3.2 (App Router), React 18.2.0, TypeScript 5
+UI: Tailwind CSS v4, shadcn/ui, Radix UI
+Backend: Supabase (PostgreSQL, Auth, Realtime, RLS enabled)
+Forms: React Hook Form + Zod validation
+External: Shopify Admin API (READ-ONLY)
+🔐 Authentication Pattern (Non-Negotiable)
+typescript
+// Server Component / API Route
 import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 
-export default async function Component() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) redirect('/login')
-  
-  // Validate employee status
-  const { data: employee } = await supabase
-    .from('employees')
-    .select('role, active')
-    .eq('auth_user_id', user.id)
-    .single()
-    
-  if (!employee?.active) redirect('/login')
-  
-  return <div>Content</div>
-}
-```
+const supabase = await createClient()
+const { data: { user } } = await supabase.auth.getUser() // NEVER getSession()
 
-### API Routes
-```typescript
-import { createClient } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
+// Always validate employee
+const { data: employee } = await supabase
+  .from('employees')
+  .select('role, active')
+  .eq('auth_user_id', user.id)
+  .single()
 
-export async function GET(request: NextRequest) {
+if (!employee?.active) redirect('/login')
+📊 Logging Requirements (MANDATORY)
+Every API route and important business event MUST be logged:
+
+API Routes
+typescript
+import { ApiLogger } from '@/lib/api-logger'
+
+export async function POST(request: NextRequest) {
+  const logContext = ApiLogger.logRequest(request)  // START
+  
   try {
-    const supabase = await createClient()
-    const { data: { user }, error } = await supabase.auth.getUser()
-    
-    if (error || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    
-    // Always validate employee
-    const { data: employee } = await supabase
-      .from('employees')
-      .select('role, active')
-      .eq('auth_user_id', user.id)
-      .single()
-    
-    if (!employee?.active) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-    
-    // Business logic here
-    return NextResponse.json({ data: result })
+    // Your logic
+    const response = NextResponse.json({ success: true })
+    ApiLogger.logResponse(logContext, response, 'What succeeded')  // END
+    return response
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    logError(error as Error, 'API_CONTEXT', { details })
+    const errorResponse = NextResponse.json({ error: 'Failed' }, { status: 500 })
+    ApiLogger.logResponse(logContext, errorResponse, 'What failed')  // END
+    return errorResponse
   }
 }
-```
+Business Events
+typescript
+import { logBusiness, logError } from '@/lib/logger'
 
-### Form Handling with React Hook Form + Zod
-```typescript
-// Define schema
-const workOrderSchema = z.object({
-  modelId: z.string().uuid(),
-  quantity: z.number().min(1).max(1000),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']),
-  dueDate: z.date().min(new Date()),
-  notes: z.string().max(500).optional()
-})
+// Log important events
+logBusiness('Worker approved', 'USER_MANAGEMENT', { workerId, approvedBy })
 
-// Use in component
-const form = useForm<WorkOrderForm>({
-  resolver: zodResolver(workOrderSchema),
-  defaultValues: {
-    priority: 'medium',
-    quantity: 1
-  }
-})
-```
+// Log errors in catch blocks
+catch (error) {
+  logError(error as Error, 'CONTEXT', { additionalInfo })
+}
+Standard Contexts: USER_MANAGEMENT, ORDER_IMPORT, BATCH_TRANSITION, TASK_ASSIGNMENT, QUALITY_CONTROL, AUTH, API_ERROR, DATABASE, PERFORMANCE
 
-### React Performance Patterns
-```typescript
-// Memoize expensive calculations
-const processedData = useMemo(() => 
-  expensiveCalculation(rawData), [rawData]
-)
+View Logs: /manager/logs (manager role required)
 
-// Stable function references for child components
-const handleUpdate = useCallback((id: string) => {
-  updateItem(id)
-}, [updateItem])
+🔗 Page Navigation Requirements
+NEVER create orphaned pages. Every new page must:
 
-// Lazy load heavy components
-const HeavyChart = dynamic(() => import('@/components/charts/HeavyChart'), {
-  loading: () => <ChartSkeleton />
-})
-```
+Have a clear access path:
+Main navigation item
+Dashboard card/button
+Settings submenu
+Parent page link
+Follow structure:
+Debug/test pages: src/app/(debug)/
+Feature pages: Include index/landing page
+Multi-page features: Clear navigation between pages
+Update navigation:
+typescript
+// Always include a task to update navigation
+// Example: Add to src/components/navigation/main-nav.tsx
+🏗️ Component Patterns
+Server Components (Default)
+Direct data fetching
+No useState, useEffect
+Can be async
+Use for layouts, pages, data display
+Client Components ('use client')
+Only when needed for interactivity
+Hooks and browser APIs
+Keep as leaf nodes
+Handle user interactions
+Performance
+typescript
+// Memoize expensive operations
+const result = useMemo(() => expensiveCalc(data), [data])
 
-## 📊 Data Access Patterns
+// Stable references
+const handleClick = useCallback(() => {}, [deps])
 
-### Build Management
-- Scope builds by `assigned_to` matching current employee
-- Always join with `headphone_models` for build UI
-- Use `model_id`, `builder_id`, `assigned_to` for relationships
-
-### Task Management  
-- Filter tasks via `production_tasks.assigned_to_id`
-- Always scope by build and status
-- Use consistent status enums (`build_stage`)
-
-### QC Handling
-- QC steps defined per model in `qc_steps` table
-- Store results with consistent schema: `{ looks, hardware, sound, notes }`
-- Use templates for new models, not one-off inserts
-
-### Type-Safe Queries
-```typescript
-// Generate types from Supabase
-// npx supabase gen types typescript --project-id "$PROJECT_ID" > types/database.types.ts
-
-import { Database } from '@/types/database.types'
-
-type Build = Database['public']['Tables']['builds']['Row']
-type Employee = Database['public']['Tables']['employees']['Row']
-
-// Use in queries
-const { data, error } = await supabase
+// Lazy load heavy components  
+const Chart = dynamic(() => import('@/components/Chart'))
+📊 Database Patterns
+RLS: MANDATORY on all tables
+Queries: Type-safe with generated types
+Scope: Always filter by current user/employee
+Joins: Use Supabase's nested selection
+Indexes: Add for RLS policy columns
+typescript
+// Type-safe query
+const { data } = await supabase
   .from('builds')
   .select(`
     *,
-    headphone_model:headphone_models(name, model_code),
-    assigned_to:employees(name, employee_id)
+    headphone_model:headphone_models(name),
+    assigned_to:employees(name)
   `)
-  .returns<BuildWithRelations[]>()
-```
-
-## 🛡️ Security Requirements
-- **Input validation**: Use Zod schemas for all API inputs
-- **Error handling**: Consistent error structures `{ error: string }`
-- **Data scoping**: All queries respect user permissions via `auth_user_id`
-- **No client-side secrets**: Environment variables server-side only
-- **CSRF protection**: Built into Next.js, don't disable
-- **Rate limiting**: Implement on sensitive endpoints
-- **XSS prevention**: React handles by default, be careful with dangerouslySetInnerHTML
-
-## 🎨 Design Rules
-- **Modals**: Keep the dialogs to be contextual with position near the cursor and don't be intrusive with background
-- **Buttons**: When creating buttons make sure to give them some color. The colors should be soft friendly
-- **Components**: Use shadcn/ui patterns - install via `npx shadcn@latest add [component]`
-- **Styling**: Tailwind utilities first, cn() for conditional classes
-- **Dark mode**: Support via CSS variables
-- **Accessibility**: Semantic HTML, ARIA labels, keyboard navigation
-- **Icons**: Import individually from lucide-react for tree-shaking:
-  ```typescript
-  // Good - only imports what you need
-  import { Camera, Settings } from 'lucide-react'
-  
-  // Bad - imports entire library
-  import * as Icons from 'lucide-react'
-  ```
-
-## 🔄 Database Rules
-- **Schema**: Treat `supabase/schema.sql` as source of truth
-- **Migrations**: Use Supabase CLI, don't manually edit migration files
-- **Realtime**: Enable on key tables (`builds`, `production_tasks`)
-- **Triggers**: Document all triggers and enums in code comments
-- **RLS Policies**: Test in Supabase dashboard before deployment
-- **Indexes**: Add for frequently queried columns
-
-## 🏪 External Integrations
-- **Shopify**: Route through Supabase Edge Functions only
-- **Never trust client data** for order/build sync
-- **API validation**: All external data must be validated server-side
-- **Error handling**: Graceful degradation if external services fail
-- **Retry logic**: Implement exponential backoff
-- **PDF Generation**: 
-  - Prefer server-side generation for complex documents
-  - Client-side only for simple, user-triggered exports
-  - Validate and sanitize all inputs to PDFs
-
-## 💻 Development Standards
-- **TypeScript**: Strict mode enabled
-- **Server-first**: Use Server Components by default
-- **Error boundaries**: Comprehensive error handling
-- **Performance**: Check specs before building features
-- **Testing**: Test auth flows and permissions thoroughly
-- **Naming conventions**:
-  - Components: PascalCase
-  - Utilities: camelCase
-  - Types: PascalCase
-  - Constants: UPPER_SNAKE_CASE
-
-## 🚀 Performance Guidelines
-- **Images**: Always use next/image with proper sizing
-- **Code splitting**: Dynamic imports for heavy components
-- **Caching**: Use Next.js caching options appropriately
-- **Bundle size**: Monitor with @next/bundle-analyzer
-- **Core Web Vitals**: LCP < 1.2s, FID < 50ms, CLS < 0.05
-
-## 🧪 Testing Strategy
-- **Unit tests**: Utilities and pure functions
-- **Integration tests**: API routes and database operations
-- **E2E critical paths**:
-  - User authentication flow
-  - Build creation and assignment
-  - QC completion workflow
-  - Report generation
-
-## 📝 Quick Commands
-```bash
+  .eq('assigned_to', employee.id)
+🛡️ Security Rules
+Input validation: Zod schemas for ALL inputs
+Error format: { error: string }
+No client-side secrets
+Never trust client data
+Always use HTTPS
+Rate limit sensitive endpoints
+🎨 UI/UX Standards
+Mobile-first: Worker interfaces must work on phones/tablets
+Components: Use shadcn/ui (npx shadcn@latest add)
+Icons: Import individually from lucide-react
+Colors: Soft, friendly colors for buttons
+Modals: Contextual positioning, non-intrusive
+Dark mode: Support via CSS variables
+🚫 Forbidden Patterns
+@supabase/auth-helpers-nextjs (use @supabase/ssr)
+getSession() server-side (use getUser())
+Writing to Shopify (READ-ONLY integration)
+any type in TypeScript
+Hardcoded IDs or credentials
+Client-side database access
+localStorage for sensitive data
+Orphaned pages without navigation
+📝 Quick Reference
+bash
 # Development
-npm run dev -- --turbo        # Start with Turbopack
-npx shadcn@latest add        # Add UI components
+npm run dev          # Start development
+npm run build        # Check for errors before committing
 
-# Database
-npx supabase gen types typescript  # Generate types
-npx supabase db push              # Push migrations
-npx supabase db reset             # Reset database
+# Database  
+npx supabase gen types typescript > types/database.types.ts
+npx supabase db push # Push migrations
 
-# Quality
-npm run type-check           # TypeScript validation
-npm run lint                # ESLint check
-npm run test               # Run test suite
-```
+# UI Components
+npx shadcn@latest add [component]
+🔄 External Integrations
+Shopify: READ-ONLY via Edge Functions
+PDF: Server-side for complex, client for simple
+Validate: All external data server-side
+Errors: Graceful degradation if services fail
+📁 Project Structure
+src/
+├── app/              # Pages and API routes
+│   ├── api/         # API endpoints
+│   ├── (debug)/     # Debug pages (not in prod nav)
+│   └── (dashboard)/ # Main app pages
+├── components/      # Reusable components
+├── lib/            # Utilities and configs
+│   ├── supabase/   # Auth clients
+│   └── logger/     # Logging utilities
+└── features/       # Feature modules
+Remember: When in doubt, ASK. Check /manager/logs for debugging. Always run npm run build before committing.
 
-## 🚫 Forbidden Patterns
-- Using `@supabase/auth-helpers-nextjs`
-- Using `getSession()` on server-side
-- Using `useSession()` for access control
-- Trusting client-side data for sensitive operations
-- Manual migration file editing
-- Hardcoding user IDs or skipping employee validation
-- Using `any` type in TypeScript
-- Inline styles instead of Tailwind classes
-- Direct database access from client components
-- Storing sensitive data in localStorage
-- Importing entire icon libraries
-
-<!-- Upgrade targets for planning:
-- React 19 when stable (currently 18.2.0)
-- Zod v4 when ready (breaking changes)
-- Monitor Next.js 15.x minor updates
--->

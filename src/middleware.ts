@@ -52,7 +52,7 @@ export async function middleware(request: NextRequest) {
   if (user && !isPublicRoute) {
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, is_active')
+      .select('id, role, is_active, approval_status')
       .eq('auth_user_id', user.id)
       .single()
 
@@ -62,17 +62,30 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    // Role-based route protection
-    if (pathname.startsWith('/manager') && !['manager', 'supervisor'].includes(worker.role || '')) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/worker'
-      return NextResponse.redirect(url)
+    // Check approval status if the field exists
+    const approvalStatus = (worker as any).approval_status
+    if (approvalStatus && approvalStatus !== 'approved') {
+      // Allow access to a pending approval page
+      if (pathname !== '/pending-approval' && !pathname.startsWith('/api/auth')) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/pending-approval'
+        return NextResponse.redirect(url)
+      }
     }
 
-    if (pathname.startsWith('/worker') && worker.role === 'manager') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/manager'
-      return NextResponse.redirect(url)
+    // Role-based route protection (only for approved users)
+    if (approvalStatus === 'approved' || !approvalStatus) {
+      if (pathname.startsWith('/manager') && !['manager', 'supervisor'].includes(worker.role || '')) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/worker'
+        return NextResponse.redirect(url)
+      }
+
+      if (pathname.startsWith('/worker') && worker.role === 'manager') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/manager'
+        return NextResponse.redirect(url)
+      }
     }
   }
 

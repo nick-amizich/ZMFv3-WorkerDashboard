@@ -16,7 +16,7 @@ export async function GET(
     // Validate worker status
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, is_active')
+      .select('id, role, active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -39,15 +39,17 @@ export async function GET(
         *,
         reported_by:workers!production_issues_reported_by_id_fkey(
           id,
-          name
+          name,
+          employee_id
         ),
         resolved_by:workers!production_issues_resolved_by_id_fkey(
           id,
-          name
+          name,
+          employee_id
         ),
         task:work_tasks(
           id,
-          task_description,
+          custom_notes,
           order_item:order_items(
             product_name,
             order:orders(order_number, customer_name)

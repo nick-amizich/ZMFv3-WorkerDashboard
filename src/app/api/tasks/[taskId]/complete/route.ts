@@ -17,7 +17,7 @@ export async function POST(
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, is_active')
+      .select('id, active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -28,7 +28,7 @@ export async function POST(
     // Verify the task is assigned to this worker
     const { data: task } = await supabase
       .from('work_tasks')
-      .select('assigned_to_id, status, started_at')
+      .select('assigned_to_id, status, assigned_at')
       .eq('id', taskId)
       .single()
     
@@ -42,8 +42,8 @@ export async function POST(
     
     // Calculate actual hours
     let actualHours = 0
-    if (task.started_at) {
-      const startTime = new Date(task.started_at).getTime()
+    if (task.assigned_at) {
+      const startTime = new Date(task.assigned_at).getTime()
       const endTime = new Date().getTime()
       actualHours = Number(((endTime - startTime) / (1000 * 60 * 60)).toFixed(2))
     }
@@ -54,7 +54,7 @@ export async function POST(
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
-        actual_hours: actualHours,
+        time_spent_minutes: Math.round(actualHours * 60),
         updated_at: new Date().toISOString()
       })
       .eq('id', taskId)
@@ -65,16 +65,7 @@ export async function POST(
       return NextResponse.json({ error: updateError.message }, { status: 400 })
     }
     
-    // Create work log entry
-    await supabase
-      .from('work_logs')
-      .insert({
-        task_id: taskId,
-        worker_id: worker.id,
-        log_type: 'complete',
-        time_spent_minutes: Math.round(actualHours * 60),
-        notes: 'Task completed'
-      })
+    // Log removed - work_logs table no longer exists
     
     return NextResponse.json({ task: updatedTask })
   } catch (error) {

@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
             order:orders(order_number)
           )
         `)
-        .eq('status', 'assigned')
+        .eq('status', 'pending')
         .not('stage', 'is', null),
       
       // Recent stage transitions for flow analysis
@@ -96,20 +96,21 @@ export async function GET(request: NextRequest) {
         .gte('transition_time', startTime.toISOString())
         .order('transition_time', { ascending: false }),
       
-      // Worker availability by stage
+      // Worker availability by stage - V3 doesn't have worker_stage_assignments
+      // We'll get this from work_tasks assignments instead
       supabase
-        .from('worker_stage_assignments')
+        .from('work_tasks')
         .select(`
           stage,
-          worker_id,
-          skill_level,
-          workers!worker_id(
+          assigned_to_id,
+          assigned_to:workers!work_tasks_assigned_to_id_fkey(
             id,
             name,
             is_active
           )
         `)
-        .eq('is_active', true),
+        .eq('status', 'in_progress')
+        .not('assigned_to_id', 'is', null),
       
       // Historical stage performance (last 30 days for trend analysis)
       supabase
@@ -123,10 +124,10 @@ export async function GET(request: NextRequest) {
         .select('stage, severity, created_at, resolution_status')
         .gte('created_at', startTime.toISOString()),
       
-      // Active time logs to see who's working on what
+      // Active work logs to see who's working on what
       supabase
         .from('time_logs')
-        .select('worker_id, stage, start_time')
+        .select('worker_id, start_time, task_id')
         .is('end_time', null)
     ])
     
@@ -142,8 +143,19 @@ export async function GET(request: NextRequest) {
     // Calculate metrics for each stage
     for (const stage of allStages) {
       const stageWaitingTasks = waitingTasks.data?.filter(t => t.stage === stage) || []
-      const stageWorkers = workerAssignments.data?.filter(w => w.stage === stage && w.workers?.is_active) || []
-      const activeWorkers = timeLogsData.data?.filter(log => log.stage === stage) || []
+      const stageWorkers = workerAssignments.data?.filter(w => w.stage === stage && w.assigned_to?.is_active) || []
+      // For active workers, we need to get the stage from their current tasks
+      const activeWorkers: any[] = []
+      if (timeLogsData.data) {
+        for (const log of timeLogsData.data) {
+          if (log.task_id) {
+            const task = waitingTasks.data?.find(t => t.id === log.task_id)
+            if (task?.stage === stage) {
+              activeWorkers.push(log)
+            }
+          }
+        }
+      }
       const stageTransitionData = stageTransitions.data?.filter(t => t.to_stage === stage) || []
       const stageIssues = productionIssues.data?.filter(i => i.stage === stage) || []
       

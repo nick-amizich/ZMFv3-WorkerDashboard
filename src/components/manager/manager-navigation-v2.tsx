@@ -13,7 +13,8 @@ import {
   Shield,
   FileText,
   ChevronDown,
-  Zap
+  Zap,
+  Layout
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -44,6 +45,11 @@ const navigationItems: NavItem[] = [
     icon: Home,
   },
   {
+    name: 'Dashboard V3',
+    href: '/manager/dashboard-v3',
+    icon: Layout,
+  },
+  {
     name: 'Production',
     icon: GitBranch,
     children: [
@@ -55,7 +61,7 @@ const navigationItems: NavItem[] = [
       {
         name: 'Task Management',
         href: '/manager/tasks',
-        description: 'Assign and track worker tasks'
+        description: 'Assign headphone build tasks and track production'
       },
       {
         name: 'Workflows',
@@ -71,10 +77,11 @@ const navigationItems: NavItem[] = [
   },
   {
     name: 'Quality',
+    href: '/manager/quality',
     icon: Shield,
     children: [
       {
-        name: 'Analytics',
+        name: 'Quality Analytics',
         href: '/manager/analytics',
         description: 'Quality metrics and First Pass Yield'
       },
@@ -102,12 +109,7 @@ const navigationItems: NavItem[] = [
       {
         name: 'Workers',
         href: '/manager/workers',
-        description: 'Manage worker profiles and skills'
-      },
-      {
-        name: 'Performance',
-        href: '/manager/analytics',
-        description: 'Worker productivity metrics'
+        description: 'Manage worker profiles, approvals, and permissions'
       }
     ]
   },
@@ -118,8 +120,19 @@ const navigationItems: NavItem[] = [
   },
   {
     name: 'Settings',
-    href: '/manager/settings',
     icon: Settings,
+    children: [
+      {
+        name: 'Headphone Models',
+        href: '/manager/settings/headphone-models',
+        description: 'Manage headphone models for order categorization'
+      },
+      {
+        name: 'General Settings',
+        href: '/manager/settings',
+        description: 'System configuration and preferences'
+      }
+    ]
   }
 ]
 
@@ -133,6 +146,21 @@ const devTools: NavItem[] = [
         name: 'Debug',
         href: '/manager/debug',
         description: 'Debug panel'
+      },
+      {
+        name: 'Logs',
+        href: '/manager/logs',
+        description: 'System logs and error tracking'
+      },
+      {
+        name: 'Page Test',
+        href: '/manager/page-test',
+        description: 'Page testing tool'
+      },
+      {
+        name: 'Workflow Test',
+        href: '/manager/workflow-test',
+        description: 'Workflow testing tool'
       },
       {
         name: 'Test Import',

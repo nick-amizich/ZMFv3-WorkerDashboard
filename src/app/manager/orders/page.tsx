@@ -8,10 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
-import { RefreshCw, AlertCircle, Search, Filter, Calendar, Package, User, DollarSign, Download, Clock } from 'lucide-react'
+import { RefreshCw, AlertCircle, Search, Filter, Calendar, Package, User, DollarSign, Download, Clock, ChevronDown } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 // Types for Shopify import
 interface ShopifyLineItem {
@@ -23,6 +24,7 @@ interface ShopifyLineItem {
   sku: string
   headphone_specs: {
     product_category: string
+    wood_type?: string
     material?: string
     color?: string
     pad_type?: string
@@ -47,6 +49,8 @@ interface ShopifyOrder {
     email: string
   }
   line_items: ShopifyLineItem[]
+  main_items?: ShopifyLineItem[]
+  extra_items?: ShopifyLineItem[]
   _import_status?: {
     has_imported_items: boolean
     imported_count: number
@@ -63,7 +67,7 @@ export default function OrdersPage() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [lastSyncResult, setLastSyncResult] = useState<any>(null)
   const { toast } = useToast()
-
+  
   const fetchShopifyOrders = useCallback(async (showToast = true) => {
     setLoading(true)
     try {
@@ -102,32 +106,20 @@ export default function OrdersPage() {
     fetchShopifyOrders(false)
   }, [fetchShopifyOrders])
 
-  const handleLineItemToggle = (orderId: number, lineItemId: number, checked: boolean) => {
-    setSelectedItems(prev => {
-      const orderSelections = prev[orderId] || []
-      
-      if (checked) {
-        return {
-          ...prev,
-          [orderId]: [...orderSelections, lineItemId]
-        }
-      } else {
-        return {
-          ...prev,
-          [orderId]: orderSelections.filter(id => id !== lineItemId)
-        }
-      }
-    })
-  }
-
   const handleOrderToggle = (orderId: number, checked: boolean) => {
     const order = shopifyOrders.find(o => o.id === orderId)
     if (!order) return
 
     if (checked) {
+      // Collect all line item IDs from both main and extra items
+      const allLineItemIds = [
+        ...(order.main_items || []).map(item => item.id),
+        ...(order.extra_items || []).map(item => item.id)
+      ]
+      
       setSelectedItems(prev => ({
         ...prev,
-        [orderId]: order.line_items.map(item => item.id)
+        [orderId]: allLineItemIds
       }))
     } else {
       setSelectedItems(prev => {
@@ -204,6 +196,12 @@ export default function OrdersPage() {
     setImporting(true)
     
     try {
+      // Collect all line item IDs from both main and extra items
+      const allLineItemIds = [
+        ...(order.main_items || []).map(item => item.id),
+        ...(order.extra_items || []).map(item => item.id)
+      ]
+      
       const response = await fetch('/api/shopify/import', {
         method: 'POST',
         headers: {
@@ -211,7 +209,7 @@ export default function OrdersPage() {
         },
         body: JSON.stringify({
           orderId: order.id,
-          lineItemIds: order.line_items.map(item => item.id)
+          lineItemIds: allLineItemIds
         })
       })
       
@@ -255,19 +253,155 @@ export default function OrdersPage() {
     return <Badge variant="secondary">Accessory</Badge>
   }
 
+  const renderLineItem = (item: ShopifyLineItem, orderId: number, isMainItem: boolean = false) => {
+    const isItemSelected = selectedItems[orderId]?.includes(item.id) || false
+    const price = parseFloat(item.price || '0')
+    
+    return (
+      <div key={item.id} className={`border rounded-lg p-4 space-y-3 transition-all ${
+        isMainItem 
+          ? 'border-green-200 bg-green-50/30 shadow-sm' 
+          : 'border-gray-200 bg-gray-50/30'
+      }`}>
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              checked={isItemSelected}
+              onCheckedChange={(checked) => {
+                setSelectedItems(prev => {
+                  const newSelected = { ...prev }
+                  if (!newSelected[orderId]) newSelected[orderId] = []
+                  
+                  if (checked) {
+                    newSelected[orderId] = [...newSelected[orderId], item.id]
+                  } else {
+                    newSelected[orderId] = newSelected[orderId].filter(id => id !== item.id)
+                  }
+                  
+                  return newSelected
+                })
+              }}
+            />
+            
+            <div className="flex-1 min-w-0">
+              {/* Product Name & Key Details */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-semibold text-gray-900 text-base">{item.title}</h4>
+                  {getPriorityBadge(item)}
+                </div>
+                
+                {/* Variant Title (if different from main title) */}
+                {item.variant_title && item.variant_title !== item.title && (
+                  <p className="text-sm text-gray-600 font-medium">{item.variant_title}</p>
+                )}
+                
+                {/* Key Specs - Wood Type & Material (Elevated) */}
+                {(item.headphone_specs.wood_type || item.headphone_specs.material) && (
+                  <div className="flex items-center gap-3">
+                    {item.headphone_specs.wood_type && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-full bg-amber-100 border border-amber-300"></div>
+                        <span className="text-sm font-semibold text-amber-800">
+                          {item.headphone_specs.wood_type} Wood
+                        </span>
+                      </div>
+                    )}
+                    {item.headphone_specs.material && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-full bg-blue-100 border border-blue-300"></div>
+                        <span className="text-sm font-medium text-blue-700">
+                          {item.headphone_specs.material}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Additional Specs Grid */}
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                {item.headphone_specs.color && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-500">Color:</span>
+                    <span className="font-medium text-gray-700">{item.headphone_specs.color}</span>
+                  </div>
+                )}
+                {item.headphone_specs.pad_type && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-500">Pads:</span>
+                    <span className="font-medium text-gray-700">{item.headphone_specs.pad_type}</span>
+                  </div>
+                )}
+                {item.headphone_specs.cable_type && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-500">Cable:</span>
+                    <span className="font-medium text-gray-700">{item.headphone_specs.cable_type}</span>
+                  </div>
+                )}
+                {item.sku && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-500">SKU:</span>
+                    <span className="font-mono text-gray-600">{item.sku}</span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Custom Engraving (Special Highlight) */}
+              {item.headphone_specs.custom_engraving && (
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-medium text-yellow-800">Custom Engraving:</span>
+                    <span className="text-xs text-yellow-700">&quot;{item.headphone_specs.custom_engraving}&quot;</span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Tasks Preview */}
+              {item.estimated_tasks && item.estimated_tasks.length > 0 && (
+                <div className="mt-3 flex items-center gap-2">
+                  <Clock className="h-3 w-3 text-gray-400" />
+                  <span className="text-xs text-gray-500">
+                    Tasks: {item.estimated_tasks.join(', ')}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Price & Quantity */}
+          <div className="text-right shrink-0 ml-4">
+            {item.quantity > 1 && (
+              <div className="text-sm font-medium text-gray-700">
+                Qty: {item.quantity}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Filter Shopify orders
   const filteredShopifyOrders = shopifyOrders.filter((order: ShopifyOrder) => {
+    // Get all items from both new and legacy structures
+    const allItems = [
+      ...(order.main_items || []),
+      ...(order.extra_items || []),
+      ...(order.line_items || [])
+    ]
+    
     const matchesSearch = searchTerm === '' || 
       order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customer?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.line_items.some((item: ShopifyLineItem) => 
+      allItems.some((item: ShopifyLineItem) => 
         item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.sku.toLowerCase().includes(searchTerm.toLowerCase())
       )
     
     const matchesCategory = categoryFilter === 'all' || 
-      order.line_items.some((item: ShopifyLineItem) => item.headphone_specs.product_category === categoryFilter)
+      allItems.some((item: ShopifyLineItem) => item.headphone_specs.product_category === categoryFilter)
     
     return matchesSearch && matchesCategory
   })
@@ -290,12 +424,12 @@ export default function OrdersPage() {
         <div>
           <h2 className="text-2xl font-bold">Import Orders</h2>
           <p className="text-muted-foreground">
-            Import orders from Shopify into production
+            Import headphone builds from Shopify into production
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline"
+        <Button 
+          variant="outline"
             onClick={() => fetchShopifyOrders(true)}
             disabled={loading}
           >
@@ -308,17 +442,17 @@ export default function OrdersPage() {
             className="bg-green-600 hover:bg-green-700"
           >
             {importing ? (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            <>
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                 Importing...
-              </>
-            ) : (
-              <>
+            </>
+          ) : (
+            <>
                 <Download className="mr-2 h-4 w-4" />
-                Import Selected ({getSelectedCount()})
-              </>
-            )}
-          </Button>
+                Import ({getSelectedCount()})
+            </>
+          )}
+        </Button>
         </div>
       </div>
 
@@ -362,7 +496,7 @@ export default function OrdersPage() {
                 }}
               >
                 Select All Visible
-              </Button>
+            </Button>
             </div>
           </AlertDescription>
         </Alert>
@@ -393,7 +527,7 @@ export default function OrdersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="headphone">Headphones</SelectItem>
+                <SelectItem value="headphone">Builds</SelectItem>
                 <SelectItem value="accessory">Accessories</SelectItem>
                 <SelectItem value="cable">Cables</SelectItem>
                 <SelectItem value="electronics">Electronics</SelectItem>
@@ -410,27 +544,29 @@ export default function OrdersPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
               <p className="text-2xl font-bold text-blue-600">{filteredShopifyOrders.length}</p>
-              <p className="text-sm text-muted-foreground">Orders Available</p>
+              <p className="text-sm text-muted-foreground">Orders</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-green-600">
-                {filteredShopifyOrders.reduce((sum, order) => sum + order.line_items.length, 0)}
+                {filteredShopifyOrders.reduce((sum, order) => 
+                  sum + (order.main_items?.length || 0), 0
+                )}
               </p>
-              <p className="text-sm text-muted-foreground">Total Items</p>
+              <p className="text-sm text-muted-foreground">Builds</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-orange-600">{getSelectedCount()}</p>
-              <p className="text-sm text-muted-foreground">Items Selected</p>
+              <p className="text-sm text-muted-foreground">Selected</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-purple-600">
                 {filteredShopifyOrders.reduce((sum, order) => 
-                  sum + order.line_items.filter(item => 
+                  sum + (order.main_items?.filter(item => 
                     item.headphone_specs.requires_custom_work
-                  ).length, 0
+                  ).length || 0), 0
                 )}
               </p>
-              <p className="text-sm text-muted-foreground">Custom Work Items</p>
+              <p className="text-sm text-muted-foreground">Custom Work</p>
             </div>
           </div>
         </CardContent>
@@ -439,126 +575,113 @@ export default function OrdersPage() {
       {/* Orders Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
         {filteredShopifyOrders.map((order) => {
-          const isOrderSelected = selectedItems[order.id]?.length === order.line_items.length
-          const isPartiallySelected = selectedItems[order.id]?.length > 0 && selectedItems[order.id]?.length < order.line_items.length
+          const totalItems = (order.main_items?.length || 0) + (order.extra_items?.length || 0)
+          const selectedCount = selectedItems[order.id]?.length || 0
+          const isOrderSelected = selectedCount === totalItems && totalItems > 0
+          const isPartiallySelected = selectedCount > 0 && selectedCount < totalItems
           
           return (
             <Card key={order.id} className="transition-all duration-200 hover:shadow-md">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Checkbox
+                  <div className="flex items-center gap-3">
+                    <Checkbox 
                       checked={isOrderSelected}
-                      ref={(el: HTMLButtonElement | null) => {
-                        if (el) (el as any).indeterminate = isPartiallySelected
+                      ref={(el) => {
+                        if (el && isPartiallySelected) {
+                          const input = el.querySelector('input')
+                          if (input) input.indeterminate = true
+                        }
                       }}
                       onCheckedChange={(checked) => handleOrderToggle(order.id, checked as boolean)}
                     />
                     <div>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        Order #{order.order_number}
-                        <Badge variant="outline">
-                          {order.financial_status}
-                        </Badge>
-                        {order._import_status?.has_imported_items && (
-                          <Badge variant="secondary" className="text-xs">
-                            {order._import_status.imported_count}/{order._import_status.total_count} imported
-                          </Badge>
-                        )}
-                      </CardTitle>
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-1">
-                            <User className="h-3 w-3" />
-                            {order.customer ? `${order.customer.first_name} ${order.customer.last_name}` : 'Guest Customer'}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(order.created_at).toLocaleDateString()}
-                          </div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          #{order.order_number}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <User className="h-3 w-3" />
+                          {order.customer?.first_name} {order.customer?.last_name}
                         </div>
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-1">
-                            <DollarSign className="h-3 w-3" />
-                            ${order.total_price}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Package className="h-3 w-3" />
-                            {order.line_items.length} items
-                          </div>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(order.created_at).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
                   </div>
                   <Button
-                    size="sm"
                     variant="outline"
+                    size="sm"
                     onClick={() => importSingleOrder(order)}
                     disabled={importing}
+                    className="shrink-0 text-xs"
                   >
-                    <Download className="h-3 w-3 mr-1" />
-                    Quick Import
+                    Import Build
                   </Button>
                 </div>
               </CardHeader>
-              
-              <CardContent className="pt-0">
-                <div className="space-y-3">
-                  {order.line_items.map((item) => {
-                    const isItemSelected = selectedItems[order.id]?.includes(item.id) || false
-                    
-                    return (
-                      <div key={item.id} className="border rounded-lg p-3 space-y-2">
-                        <div className="flex items-start space-x-3">
-                          <Checkbox
-                            checked={isItemSelected}
-                            onCheckedChange={(checked) => handleLineItemToggle(order.id, item.id, checked as boolean)}
-                          />
-                          <div className="flex-1 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h4 className="font-medium text-sm">{item.title}</h4>
-                                {item.variant_title && (
-                                  <p className="text-xs text-muted-foreground">{item.variant_title}</p>
-                                )}
-                              </div>
-                              <div className="text-right">
-                                <div className="font-medium text-sm">${item.price}</div>
-                                <div className="text-xs text-muted-foreground">Qty: {item.quantity}</div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {getPriorityBadge(item)}
-                              {item.headphone_specs.material && (
-                                <Badge variant="outline" className="text-xs">
-                                  {item.headphone_specs.material}
-                                </Badge>
-                              )}
-                              {item.headphone_specs.color && (
-                                <Badge variant="outline" className="text-xs">
-                                  {item.headphone_specs.color}
-                                </Badge>
-                              )}
-                              {item.sku && (
-                                <Badge variant="outline" className="text-xs">
-                                  SKU: {item.sku}
-                                </Badge>
-                              )}
-                            </div>
-                            
-                            {item.estimated_tasks && item.estimated_tasks.length > 0 && (
-                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                <Clock className="h-3 w-3" />
-                                Tasks: {item.estimated_tasks.join(', ')}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+              <CardContent className="space-y-4">
+                {/* Order Summary */}
+                <div className="grid grid-cols-3 gap-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-blue-600">
+                      {order.main_items?.length || 0}
+                    </div>
+                    <div className="text-xs text-gray-600">Builds</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-orange-600">
+                      {order.extra_items?.length || 0}
+                    </div>
+                    <div className="text-xs text-gray-600">Extras</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-green-600">
+                      {selectedCount}
+                    </div>
+                    <div className="text-xs text-gray-600">Selected</div>
+                  </div>
                 </div>
+
+                {/* Main Items (Headphones) */}
+                {order.main_items && order.main_items.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                      <h4 className="font-semibold text-green-700">
+                        Builds ({order.main_items.length})
+                      </h4>
+                    </div>
+                    <div className="space-y-3">
+                      {order.main_items.map((item) => renderLineItem(item, order.id, true))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Extras (Collapsible) */}
+                {order.extra_items && order.extra_items.length > 0 && (
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded w-full text-left">
+                      <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+                      <div className="w-2 h-2 rounded-full bg-orange-400"></div>
+                      <span className="font-medium text-orange-700">
+                        Extras ({order.extra_items.length})
+                      </span>
+                      <span className="text-xs text-gray-500 ml-auto">
+                        Click to expand
+                      </span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-3">
+                      <div className="space-y-2 pl-6 border-l-2 border-orange-200">
+                        {order.extra_items.map((item) => renderLineItem(item, order.id, false))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
               </CardContent>
             </Card>
           )

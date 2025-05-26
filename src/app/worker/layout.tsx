@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { WorkerNavigation } from '@/components/worker/worker-navigation'
 
 export default async function WorkerLayout({
   children,
@@ -46,7 +47,8 @@ export default async function WorkerLayout({
           </div>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto">
+      <WorkerNavigation />
+      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {children}
       </main>
     </div>

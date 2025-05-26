@@ -13,8 +13,8 @@ export default function TasksPage() {
       <div className="space-y-6">
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-2xl font-bold">Task Assignment</h2>
-            <p className="text-muted-foreground">Drag and drop tasks to assign them to workers</p>
+            <h2 className="text-2xl font-bold">Headphone Production</h2>
+            <p className="text-muted-foreground">Assign build tasks to workers • Wood type and specs visible</p>
           </div>
           <CreateTaskModal />
         </div>

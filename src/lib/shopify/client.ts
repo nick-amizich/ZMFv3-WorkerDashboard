@@ -211,6 +211,7 @@ export class ShopifyClient {
     const params = new URLSearchParams({
       limit: limit.toString(),
       status: 'any',
+      fulfillment_status: 'unfulfilled',
     })
     
     if (since_id) {

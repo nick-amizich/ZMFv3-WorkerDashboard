@@ -28,13 +28,15 @@ export async function GET(request: NextRequest) {
     const status = url.searchParams.get('status')
     const stage = url.searchParams.get('stage')
     
-    // Build query with optional filters
+    // Build query with optional filters - focus on headphone tasks only
     let query = supabase
       .from('work_tasks')
       .select(`
         *,
         order_item:order_items(
           product_name,
+          variant_title,
+          product_data,
           order:orders(
             order_number,
             customer_name
@@ -42,9 +44,11 @@ export async function GET(request: NextRequest) {
         ),
         assigned_to:workers!work_tasks_assigned_to_id_fkey(
           id,
-          name
+          name,
+          role
         )
       `)
+      .in('task_type', ['sanding', 'assembly', 'qc', 'packaging']) // Only headphone production tasks
     
     // Apply filters
     if (batchId) {

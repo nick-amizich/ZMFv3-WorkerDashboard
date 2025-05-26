@@ -17,7 +17,7 @@ export async function POST(
     // Get worker profile
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, is_active')
+      .select('id, active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -31,7 +31,7 @@ export async function POST(
     // Verify the task belongs to this worker and is a QC task
     const { data: task } = await supabase
       .from('work_tasks')
-      .select('id, task_type, assigned_to_id')
+      .select('id, task_type, assigned_to_id, stage')
       .eq('id', taskId)
       .single()
     
@@ -39,7 +39,7 @@ export async function POST(
       return NextResponse.json({ error: 'Task not found' }, { status: 404 })
     }
     
-    if (task.task_type !== 'qc') {
+    if (task.stage !== 'qc' && task.stage !== 'quality_check') {
       return NextResponse.json({ error: 'Not a QC task' }, { status: 400 })
     }
     
@@ -48,10 +48,10 @@ export async function POST(
       .from('qc_results')
       .insert({
         task_id: taskId,
-        worker_id: worker.id,
+        performed_by: worker.id,
         results,
         overall_status,
-        inspector_notes: results.notes || null
+        notes: results.notes || null
       })
       .select()
       .single()
@@ -76,15 +76,7 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to update task' }, { status: 500 })
     }
     
-    // Log work completion
-    await supabase
-      .from('work_logs')
-      .insert({
-        task_id: taskId,
-        worker_id: worker.id,
-        log_type: 'completed',
-        notes: `QC ${overall_status === 'pass' ? 'passed' : 'failed'}`
-      })
+    // Log removed - work_logs table no longer exists
     
     return NextResponse.json({ 
       success: true, 

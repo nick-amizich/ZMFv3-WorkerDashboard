@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useToast } from '@/hooks/use-toast'
-import { CheckCircle, Mail, Clock } from 'lucide-react'
+import { CheckCircle, Mail, Clock, Gift } from 'lucide-react'
 import Link from 'next/link'
 
 export default function RegisterPage() {
@@ -17,8 +18,48 @@ export default function RegisterPage() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [registrationComplete, setRegistrationComplete] = useState(false)
+  const [invitationData, setInvitationData] = useState<any>(null)
+  const [checkingInvitation, setCheckingInvitation] = useState(true)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
+  
+  const invitationToken = searchParams.get('token')
+
+  useEffect(() => {
+    if (invitationToken) {
+      checkInvitation(invitationToken)
+    } else {
+      setCheckingInvitation(false)
+    }
+  }, [invitationToken])
+
+  const checkInvitation = async (token: string) => {
+    const supabase = createClient()
+    
+    // Check if invitation is valid
+    const { data: invitation, error } = await supabase
+      .from('worker_invitations')
+      .select('*')
+      .eq('invitation_token', token)
+      .is('accepted_at', null)
+      .gte('expires_at', new Date().toISOString())
+      .single()
+    
+    if (error || !invitation) {
+      toast({
+        title: 'Invalid or expired invitation',
+        description: 'Please request a new invitation from your manager.',
+        variant: 'destructive',
+      })
+      setCheckingInvitation(false)
+      return
+    }
+    
+    setInvitationData(invitation)
+    setEmail(invitation.email)
+    setCheckingInvitation(false)
+  }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,7 +75,11 @@ export default function RegisterPage() {
       email,
       password,
       options: {
-        emailRedirectTo: redirectTo
+        emailRedirectTo: redirectTo,
+        data: {
+          name: name,
+          role: 'worker'
+        }
       }
     })
 
@@ -49,27 +94,8 @@ export default function RegisterPage() {
     }
 
     if (authData.user) {
-      // Create worker profile
-      const { error: workerError } = await supabase
-        .from('workers')
-        .insert({
-          auth_user_id: authData.user.id,
-          email,
-          name,
-          role: 'worker',
-          is_active: false, // Requires manager approval
-          skills: []
-        })
-
-      if (workerError) {
-        toast({
-          title: 'Profile creation failed',
-          description: workerError.message,
-          variant: 'destructive',
-        })
-        setLoading(false)
-        return
-      }
+      // The trigger will automatically create the worker entry
+      // and handle invitation updates, so we're done!
 
       // Show success state instead of redirecting immediately
       setRegistrationComplete(true)
@@ -80,6 +106,21 @@ export default function RegisterPage() {
     }
 
     setLoading(false)
+  }
+
+  if (checkingInvitation) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8">
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+            <p className="text-center mt-4 text-muted-foreground">Checking invitation...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   // Success state after registration
@@ -104,13 +145,25 @@ export default function RegisterPage() {
                 </div>
               </div>
               
-              <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
-                <Clock className="h-5 w-5 text-yellow-600" />
-                <div>
-                  <p className="text-sm font-medium text-yellow-900">Wait for approval</p>
-                  <p className="text-xs text-yellow-700">A manager will activate your account</p>
+              {!invitationData && (
+                <div className="flex items-center space-x-3 p-3 bg-yellow-50 rounded-lg">
+                  <Clock className="h-5 w-5 text-yellow-600" />
+                  <div>
+                    <p className="text-sm font-medium text-yellow-900">Wait for approval</p>
+                    <p className="text-xs text-yellow-700">A manager will activate your account</p>
+                  </div>
                 </div>
-              </div>
+              )}
+              
+              {invitationData && (
+                <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
+                  <Gift className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="text-sm font-medium text-green-900">Pre-approved account!</p>
+                    <p className="text-xs text-green-700">You can start working after email confirmation</p>
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="pt-4 space-y-2">
@@ -122,7 +175,13 @@ export default function RegisterPage() {
               </Button>
               <Button 
                 variant="outline" 
-                onClick={() => setRegistrationComplete(false)}
+                onClick={() => {
+                  setRegistrationComplete(false)
+                  setInvitationData(null)
+                  setEmail('')
+                  setName('')
+                  setPassword('')
+                }}
                 className="w-full"
               >
                 Register Another Account
@@ -140,9 +199,23 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Worker Registration</CardTitle>
-          <CardDescription>Create your worker account for ZMF</CardDescription>
+          <CardDescription>
+            {invitationData 
+              ? 'Complete your pre-approved registration'
+              : 'Create your worker account for ZMF'
+            }
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          {invitationData && (
+            <Alert className="mb-4 border-green-200 bg-green-50">
+              <Gift className="h-4 w-4" />
+              <AlertDescription>
+                You've been invited! Your account will be automatically approved.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>
@@ -165,7 +238,7 @@ export default function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={loading}
+                disabled={loading || !!invitationData}
               />
             </div>
             <div className="space-y-2">

@@ -6,14 +6,74 @@ type OrderInsert = Database['public']['Tables']['orders']['Insert']
 type OrderItemInsert = Database['public']['Tables']['order_items']['Insert']
 type WorkTaskInsert = Database['public']['Tables']['work_tasks']['Insert']
 
+// Cache for headphone models to avoid repeated database calls
+let cachedHeadphoneModels: string[] | null = null
+let cacheTimestamp: number = 0
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
+// Helper function to clear the cache (useful when models are updated)
+export function clearHeadphoneModelsCache() {
+  cachedHeadphoneModels = null
+  cacheTimestamp = 0
+}
+
+// Helper function to get headphone models from settings
+async function getHeadphoneModels(): Promise<string[]> {
+  const now = Date.now()
+  
+  // Return cached models if still valid
+  if (cachedHeadphoneModels && (now - cacheTimestamp < CACHE_DURATION)) {
+    return cachedHeadphoneModels
+  }
+  
+  try {
+    const supabase = await createClient()
+    const { data: settings, error } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'headphone_models')
+      .single()
+    
+    if (error && error.code !== 'PGRST116') {
+      throw error
+    }
+    
+    // Default models if none exist in settings
+    const defaultModels = [
+      'Caldera', 'Auteur', 'Atticus', 'Aeon', 'Eikon', 'Aeolus', 'Verite'
+    ]
+    
+    const models = settings?.value as string[] || defaultModels
+    
+    // Update cache
+    cachedHeadphoneModels = models.map(m => m.toLowerCase())
+    cacheTimestamp = now
+    
+    return cachedHeadphoneModels
+  } catch (error) {
+    console.error('Failed to fetch headphone models, using defaults:', error)
+    
+    // Fallback to defaults if database fails
+    const fallbackModels = [
+      'caldera', 'auteur', 'atticus', 'aeon', 'eikon', 'aeolus', 'verite'
+    ]
+    
+    cachedHeadphoneModels = fallbackModels
+    cacheTimestamp = now
+    
+    return fallbackModels
+  }
+}
+
 // Helper function to parse headphone specifications from variant data
-function parseHeadphoneSpecs(lineItem: any) {
+async function parseHeadphoneSpecs(lineItem: any) {
   const variantTitle = lineItem.variant_title || ''
   const productName = lineItem.title || lineItem.name || ''
   const properties = lineItem.properties || []
   
   // Initialize specs object
   const specs: Record<string, any> = {
+    wood_type: null,
     material: null,
     color: null,
     pad_type: null,
@@ -24,76 +84,122 @@ function parseHeadphoneSpecs(lineItem: any) {
     custom_engraving: null,
     bundle_component: false
   }
+
+  // First, parse from properties (most reliable for Globo options)
+  properties.forEach((prop: any) => {
+    const key = prop.name?.toLowerCase() || ''
+    const value = prop.value || ''
+    
+    // Wood type detection (critical for production)
+    if (key.includes('wood') || key === 'wood type' || key === 'select-24') {
+      specs.wood_type = value
+    }
+    
+    // Chassis/frame material
+    if (key.includes('chassis') || key.includes('frame material')) {
+      specs.material = value
+    }
+    
+    // Pad types
+    if (key.includes('pad') || key.includes('cushion')) {
+      specs.pad_type = value
+    }
+    
+    // Cable types  
+    if (key.includes('cable') || key.includes('cord')) {
+      specs.cable_type = value
+    }
+    
+    // Custom engraving
+    if (key.includes('engraving') || key.includes('personalization')) {
+      specs.custom_engraving = value
+    }
+    
+    // Bundle detection
+    if (key.includes('bundle') || key.includes('biscuits')) {
+      specs.bundle_component = true
+    }
+    
+    // Color/finish
+    if (key.includes('color') || key.includes('finish')) {
+      specs.color = value
+    }
+    
+    // Store any custom properties
+    if (key && value && !key.startsWith('_')) {
+      specs[key.replace(/\s+/g, '_')] = value
+    }
+  })
   
-  // Parse variant title for common headphone attributes
+  // Fallback: Parse variant title for common headphone attributes if properties didn't capture everything
   const variantParts = variantTitle.split(' / ').map((part: string) => part.trim())
   
-  // Common headphone materials
-  const materials = ['Aluminum', 'Wood', 'Carbon', 'Steel', 'Titanium', 'Plastic']
+  // Common wood types
+  const woodTypes = ['Zebra', 'Cocobolo', 'Padauk', 'Cherry', 'Walnut', 'Bocote', 'Maple', 'Oak', 'Mahogany']
+  // Common materials
+  const materials = ['Aluminum', 'Aluminium', 'Wood', 'Carbon', 'Steel', 'Titanium', 'Plastic']
   const colors = ['Black', 'Silver', 'Natural', 'White', 'Red', 'Blue', 'Gold']
-  const padTypes = ['Vegan', 'Leather', 'Velour', 'Cloth', 'Perforated', 'Vented', 'Solid']
+  const padTypes = ['Vegan', 'Leather', 'Velour', 'Cloth', 'Perforated', 'Vented', 'Solid', 'Suede']
   const cableTypes = ['1/4', '3.5mm', 'XLR', 'USB-C', 'Lightning', 'Balanced']
   
   // Parse each part of the variant title
   variantParts.forEach((part: string) => {
     const upperPart = part.toUpperCase()
     
+    // Check for wood types first (highest priority)
+    if (!specs.wood_type) {
+      woodTypes.forEach(wood => {
+        if (upperPart.includes(wood.toUpperCase())) {
+          specs.wood_type = wood
+        }
+      })
+    }
+    
     // Check for materials
-    materials.forEach(material => {
-      if (upperPart.includes(material.toUpperCase())) {
-        specs.material = material
-      }
-    })
+    if (!specs.material) {
+      materials.forEach(material => {
+        if (upperPart.includes(material.toUpperCase())) {
+          specs.material = material
+        }
+      })
+    }
     
     // Check for colors
-    colors.forEach(color => {
-      if (upperPart.includes(color.toUpperCase())) {
-        specs.color = color
-      }
-    })
+    if (!specs.color) {
+      colors.forEach(color => {
+        if (upperPart.includes(color.toUpperCase())) {
+          specs.color = color
+        }
+      })
+    }
     
     // Check for pad types
-    padTypes.forEach(padType => {
-      if (upperPart.includes(padType.toUpperCase())) {
-        specs.pad_type = padType
-      }
-    })
+    if (!specs.pad_type) {
+      padTypes.forEach(padType => {
+        if (upperPart.includes(padType.toUpperCase())) {
+          specs.pad_type = padType
+        }
+      })
+    }
     
     // Check for cable types
-    cableTypes.forEach(cableType => {
-      if (part.includes(cableType)) {
-        specs.cable_type = cableType
-      }
-    })
+    if (!specs.cable_type) {
+      cableTypes.forEach(cableType => {
+        if (part.includes(cableType)) {
+          specs.cable_type = cableType
+        }
+      })
+    }
     
     // Check for impedance (like "32ohm", "150Ω")
     const impedanceMatch = part.match(/(\d+)\s?(ohm|Ω|ohms)/i)
-    if (impedanceMatch) {
+    if (impedanceMatch && !specs.impedance) {
       specs.impedance = `${impedanceMatch[1]}Ω`
     }
   })
   
-  // Parse properties for custom attributes
-  properties.forEach((prop: any) => {
-    const key = prop.name?.toLowerCase() || ''
-    const value = prop.value || ''
-    
-    if (key.includes('engraving') || key.includes('personalization')) {
-      specs.custom_engraving = value
-    }
-    
-    if (key.includes('bundle') || key.includes('biscuits')) {
-      specs.bundle_component = true
-    }
-    
-    // Store any custom properties
-    if (key && value && !key.startsWith('_')) {
-      specs[key] = value
-    }
-  })
-  
   // Determine product category and task requirements
-  const productCategory = determineProductCategory(productName, variantTitle)
+  const productCategory = await determineProductCategory(productName, variantTitle, parseFloat(lineItem.price || '0'))
   specs.product_category = productCategory
   specs.requires_assembly = productCategory === 'headphone'
   specs.requires_custom_work = !!specs.custom_engraving
@@ -101,16 +207,41 @@ function parseHeadphoneSpecs(lineItem: any) {
   return specs
 }
 
-function determineProductCategory(productName: string, variantTitle: string): string {
+async function determineProductCategory(productName: string, variantTitle: string, price: number): Promise<string> {
   const name = productName.toLowerCase()
   const variant = variantTitle.toLowerCase()
   
-  if (name.includes('headphone') || name.includes('atrium') || name.includes('aeon')) {
-    return 'headphone'
-  } else if (name.includes('pad') || name.includes('cushion')) {
+  // If price is $0, it's likely a Globo component
+  if (price === 0) {
+    return 'component'
+  }
+  
+  // Check for accessories first (more specific patterns)
+  if (name.includes('pad') || name.includes('cushion') || 
+      name.includes('cable') || name.includes('cord') ||
+      name.includes('strap') || name.includes('headband')) {
     return 'accessory'
-  } else if (name.includes('cable') || name.includes('cord')) {
-    return 'cable'
+  }
+  
+  // Get configured headphone models
+  const headphoneModels = await getHeadphoneModels()
+  
+  // Check for configured headphone models
+  const isHeadphoneModel = headphoneModels.some(model => {
+    // Check if it's specifically a headphone, not just contains the model name
+    return name.includes(model + ' headphone') || 
+           name.includes(model + 'headphone') ||
+           (name.includes(model) && name.includes('headphone')) ||
+           name === model // exact match for just the model name
+  })
+  
+  // Also check for generic "headphone" but not with accessory keywords
+  const isGenericHeadphone = name.includes('headphone') && 
+    !name.includes('pad') && !name.includes('cushion') && 
+    !name.includes('cable') && !name.includes('strap')
+  
+  if (isHeadphoneModel || isGenericHeadphone) {
+    return 'headphone'
   } else if (name.includes('amp') || name.includes('dac')) {
     return 'electronics'
   }
@@ -148,8 +279,8 @@ export async function fetchShopifyOrdersForReview() {
   }
   
   try {
-    // Fetch recent orders from Shopify
-    const orders = await shopifyClient.getOrders(50) // Get last 50 orders
+    // Fetch recent unfulfilled orders from Shopify
+    const orders = await shopifyClient.getOrders(50) // Get last 50 unfulfilled orders
     
     // Get all imported Shopify order IDs and line item IDs
     const { data: importedOrders } = await supabase
@@ -165,40 +296,74 @@ export async function fetchShopifyOrdersForReview() {
     const importedLineItemIds = new Set(importedLineItems?.map(i => i.shopify_line_item_id) || [])
     
     // Filter and enhance orders
-    const enhancedOrders = orders
-      .map(order => {
-        // Check if entire order is imported
-        const isOrderFullyImported = importedOrderIds.has(order.id) && 
-          order.line_items.every(item => importedLineItemIds.has(item.id))
+    const enhancedOrders = []
+    
+    for (const order of orders) {
+      // Filter out already imported line items
+      const unimportedLineItems = order.line_items.filter(
+        item => !importedLineItemIds.has(item.id)
+      )
+      
+      // Only include orders that have unimported items
+      if (unimportedLineItems.length === 0) {
+        continue
+      }
+      
+      // Categorize line items into main items and extras
+      const categorizedItems = {
+        mainItems: [] as any[],
+        extraItems: [] as any[]
+      }
+      
+      // Process each line item sequentially to handle async parseHeadphoneSpecs
+      for (const lineItem of unimportedLineItems) {
+        const headphoneSpecs = await parseHeadphoneSpecs(lineItem)
+        const price = parseFloat(lineItem.price || '0')
         
-        // Filter out already imported line items
-        const unimportedLineItems = order.line_items.filter(
-          item => !importedLineItemIds.has(item.id)
-        )
-        
-        // Only include orders that have unimported items
-        if (unimportedLineItems.length === 0) {
-          return null
+        const enhancedLineItem = {
+          ...lineItem,
+          headphone_specs: headphoneSpecs,
+          estimated_tasks: getRequiredTasks(headphoneSpecs.product_category, headphoneSpecs.requires_custom_work)
         }
         
-        return {
-          ...order,
-          _import_status: {
-            has_imported_items: order.line_items.length > unimportedLineItems.length,
-            imported_count: order.line_items.length - unimportedLineItems.length,
-            total_count: order.line_items.length
-          },
-          line_items: unimportedLineItems.map(lineItem => ({
-            ...lineItem,
-            headphone_specs: parseHeadphoneSpecs(lineItem),
-            estimated_tasks: getRequiredTasks(
-              parseHeadphoneSpecs(lineItem).product_category, 
-              parseHeadphoneSpecs(lineItem).requires_custom_work
-            )
-          }))
+        // Main items: Headphones with price > 0
+        if (headphoneSpecs.product_category === 'headphone' && price > 0) {
+          categorizedItems.mainItems.push(enhancedLineItem)
+        } else {
+          // Extras: $0 Globo components, accessories, cables, etc.
+          categorizedItems.extraItems.push(enhancedLineItem)
         }
+      }
+      
+      // Only include orders that have main items or manager-reviewable extras
+      if (categorizedItems.mainItems.length === 0 && categorizedItems.extraItems.length === 0) {
+        continue
+      }
+      
+      // Create legacy line_items for backwards compatibility
+      const legacyLineItems = []
+      for (const lineItem of unimportedLineItems) {
+        const headphoneSpecs = await parseHeadphoneSpecs(lineItem)
+        legacyLineItems.push({
+          ...lineItem,
+          headphone_specs: headphoneSpecs,
+          estimated_tasks: getRequiredTasks(headphoneSpecs.product_category, headphoneSpecs.requires_custom_work)
+        })
+      }
+      
+      enhancedOrders.push({
+        ...order,
+        _import_status: {
+          has_imported_items: order.line_items.length > unimportedLineItems.length,
+          imported_count: order.line_items.length - unimportedLineItems.length,
+          total_count: order.line_items.length
+        },
+        main_items: categorizedItems.mainItems,
+        extra_items: categorizedItems.extraItems,
+        // Legacy support - keep original line_items for backwards compatibility
+        line_items: legacyLineItems
       })
-      .filter(order => order !== null) // Remove fully imported orders
+    }
     
     return { 
       success: true, 
@@ -301,7 +466,14 @@ export async function importSelectedLineItems(selections: {
       }
       
       // Parse headphone specifications
-      const headphoneSpecs = parseHeadphoneSpecs(lineItem)
+      const headphoneSpecs = await parseHeadphoneSpecs(lineItem)
+      
+      // Skip creating tasks for $0 Globo components (they're just specs for the main product)
+      const price = parseFloat(lineItem.price || '0')
+      if (price === 0 && headphoneSpecs.product_category === 'component') {
+        importDetails.push(`ℹ️  Skipped component: ${lineItem.title} (specifications only)`)
+        continue
+      }
       
       const orderItemData: OrderItemInsert = {
         order_id: upsertedOrder.id,
@@ -344,7 +516,7 @@ export async function importSelectedLineItems(selections: {
           .select('id')
           .eq('order_item_id', orderItem.id)
           .eq('task_type', taskType)
-          .single()
+          .maybeSingle()
         
         if (!existingTask) {
           const taskData: WorkTaskInsert = {

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, is_active')
+      .select('id, active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -22,17 +22,17 @@ export async function POST(request: NextRequest) {
     }
     
     const body = await request.json()
-    const { time_log_id, notes } = body
+    const { work_log_id, notes } = body
     
-    // If time_log_id is provided, use it directly
-    let timeLogId = time_log_id
+    // If work_log_id is provided, use it directly
+    let workLogId = work_log_id
     
-    // If no time_log_id provided, find the worker's active timer
-    if (!timeLogId) {
+    // If no work_log_id provided, find the worker's active timer
+    if (!workLogId) {
       const { data: activeTimer } = await supabase
-        .from('time_logs')
+        .from('work_logs')
         .select('id')
-        .eq('worker_id', worker.id)
+        .eq('employee_id', worker.id)
         .is('end_time', null)
         .single()
       
@@ -42,23 +42,23 @@ export async function POST(request: NextRequest) {
         }, { status: 404 })
       }
       
-      timeLogId = activeTimer.id
+      workLogId = activeTimer.id
     }
     
-    // Verify the time log exists and belongs to this worker
-    const { data: timeLog } = await supabase
-      .from('time_logs')
-      .select('worker_id, end_time')
-      .eq('id', timeLogId)
+    // Verify the work log exists and belongs to this worker
+    const { data: workLog } = await supabase
+      .from('work_logs')
+      .select('employee_id, end_time')
+      .eq('id', workLogId)
       .single()
     
-    if (!timeLog || timeLog.worker_id !== worker.id) {
+    if (!workLog || workLog.employee_id !== worker.id) {
       return NextResponse.json({ 
-        error: 'Time log not found or not owned by you' 
+        error: 'Work log not found or not owned by you' 
       }, { status: 404 })
     }
     
-    if (timeLog.end_time) {
+    if (workLog.end_time) {
       return NextResponse.json({ 
         error: 'Timer already stopped' 
       }, { status: 400 })
@@ -66,27 +66,21 @@ export async function POST(request: NextRequest) {
     
     // Stop the timer
     const endTime = new Date().toISOString()
-    const { data: updatedTimeLog, error: updateError } = await supabase
-      .from('time_logs')
+    const { data: updatedWorkLog, error: updateError } = await supabase
+      .from('work_logs')
       .update({
-        end_time: endTime,
-        notes
+        end_time: endTime
       })
-      .eq('id', timeLogId)
+      .eq('id', workLogId)
       .select(`
         *,
         task:work_tasks(
           id,
-          task_description,
+          custom_notes,
           order_item:order_items(
             product_name,
             order:orders(order_number, customer_name)
           )
-        ),
-        batch:work_batches(
-          id,
-          name,
-          workflow_template:workflow_templates(name)
         )
       `)
       .single()
@@ -96,7 +90,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to stop timer' }, { status: 500 })
     }
     
-    return NextResponse.json(updatedTimeLog)
+    return NextResponse.json(updatedWorkLog)
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

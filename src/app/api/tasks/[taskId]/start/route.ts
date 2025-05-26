@@ -17,7 +17,7 @@ export async function POST(
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, is_active')
+      .select('id, active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -36,7 +36,7 @@ export async function POST(
       return NextResponse.json({ error: 'Task not found or not assigned to you' }, { status: 404 })
     }
     
-    if (task.status !== 'assigned') {
+    if (task.status !== 'pending') {
       return NextResponse.json({ error: 'Task cannot be started' }, { status: 400 })
     }
     
@@ -45,7 +45,7 @@ export async function POST(
       .from('work_tasks')
       .update({
         status: 'in_progress',
-        started_at: new Date().toISOString(),
+        assigned_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
       .eq('id', taskId)
@@ -56,15 +56,7 @@ export async function POST(
       return NextResponse.json({ error: updateError.message }, { status: 400 })
     }
     
-    // Create work log entry
-    await supabase
-      .from('work_logs')
-      .insert({
-        task_id: taskId,
-        worker_id: worker.id,
-        log_type: 'start',
-        notes: 'Task started'
-      })
+    // Log entry removed - work_logs table no longer exists
     
     return NextResponse.json({ task: updatedTask })
   } catch (error) {

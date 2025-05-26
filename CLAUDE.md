@@ -1,147 +1,201 @@
-# Standalone Worker Management App
+# ZMFv2 Development Rules
 
-## Current Status
-- ✅ Phase 1: Foundation Setup - Next.js 15 with TypeScript and all dependencies installed
-- ✅ Phase 1: Database & Auth - Schema deployed, RLS policies active, auth middleware configured  
-- ✅ Phase 1: Shopify Integration - Read-only client, sync mechanism, Edge Function deployed
-- ✅ Phase 2: Manager Dashboard - Dashboard overview, task assignment with drag-drop
-- ✅ Phase 2: Worker Interface - Mobile-responsive task list, time tracking, status updates
-- 🔄 Phase 2: QC System - In progress
-- ⏳ Phase 3: Testing & Deployment
+**Project**: Headphone manufacturing company backend  
+**Stack**: Next.js 15.3.2 + Supabase + TypeScript + React 18.2.0
 
-## Database Info
-- Project: ZMF Worker DB (kjdicpudxqxenhjwdrzg)
-- All tables created with RLS policies
-- Edge Function: shopify-sync (deployed)
+## 🚨 CRITICAL: Ask for Clarification
+If any requirement is unclear or seems to conflict with existing patterns, **STOP and ASK** before implementing. Better to clarify than to build the wrong thing.
 
-## Project Context
-- **Purpose**: Production-ready worker task management system for headphone manufacturing
-- **Timeline**: 3 weeks to production
-- **Stack**: Next.js 15 + Supabase + TypeScript
-- **Scope**: Read-only Shopify integration + worker task assignment/tracking
-- **Risk Level**: Minimal (isolated database, read-only Shopify)
+## 📋 Core Stack
+- **Frontend**: Next.js 15.3.2 (App Router), React 18.2.0, TypeScript 5
+- **UI**: Tailwind CSS v4, shadcn/ui, Radix UI  
+- **Backend**: Supabase (PostgreSQL, Auth, Realtime, RLS enabled)
+- **Forms**: React Hook Form + Zod validation
+- **External**: Shopify Admin API (READ-ONLY)
 
-## Critical Rules
-
-### 🔒 Shopify Integration (CRITICAL)
-- **READ-ONLY ONLY** - Never write to Shopify store
-- Use limited scope API token: `read_orders`, `read_products`, `read_customers`
-- Sync every 15 minutes via cron job
-- Store full order data in `raw_data` JSONB field
-- Graceful degradation if Shopify API fails
-
-### 🛡️ Authentication Flow
-1. Supabase auth verification (`getUser()`, never `getSession()`)
-2. Employee status validation (`active = true`)
-3. Role-based permissions (`worker`, `supervisor`, `manager`)
-4. Data scoping via `auth_user_id`
-
-### 📊 Database Schema Focus
-- `orders` - Synced from Shopify, immutable after sync
-- `order_items` - Individual products to build
-- `workers` - Employee management with skills array
-- `work_tasks` - Task assignment & tracking with time logging
-- `qc_templates` & `qc_results` - Quality control workflows
-
-## Code Patterns
-
-### API Route Template
+## 🔐 Authentication Pattern (Non-Negotiable)
 ```typescript
+// Server Component / API Route
 import { createClient } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+const supabase = await createClient()
+const { data: { user } } = await supabase.auth.getUser() // NEVER getSession()
+
+// Always validate employee
+const { data: employee } = await supabase
+  .from('employees')
+  .select('role, active')
+  .eq('auth_user_id', user.id)
+  .single()
+
+if (!employee?.active) redirect('/login')
+```
+
+## 📊 Logging Requirements (MANDATORY)
+Every API route and important business event MUST be logged:
+
+### API Routes
+```typescript
+import { ApiLogger } from '@/lib/api-logger'
+
+export async function POST(request: NextRequest) {
+  const logContext = ApiLogger.logRequest(request)  // START
+  
   try {
-    const supabase = await createClient()
-    const { data: { user }, error } = await supabase.auth.getUser()
-    
-    if (error || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    
-    // ALWAYS validate employee status
-    const { data: employee } = await supabase
-      .from('employees')
-      .select('role, active')
-      .eq('auth_user_id', user.id)
-      .single()
-    
-    if (!employee?.active) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-    
-    // Your logic here
-    return NextResponse.json({ data: result })
+    // Your logic
+    const response = NextResponse.json({ success: true })
+    ApiLogger.logResponse(logContext, response, 'What succeeded')  // END
+    return response
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    logError(error as Error, 'API_CONTEXT', { details })
+    const errorResponse = NextResponse.json({ error: 'Failed' }, { status: 500 })
+    ApiLogger.logResponse(logContext, errorResponse, 'What failed')  // END
+    return errorResponse
   }
 }
 ```
 
-### Data Access Patterns
-- **Build Management**: Scope by `assigned_to` matching current employee
-- **Task Filtering**: Always filter via `production_tasks.assigned_to_id`
-- **QC Results**: Use consistent schema `{ looks, hardware, sound, notes }`
-- **Time Tracking**: Log all work periods in `work_logs` table
+### Business Events
+```typescript
+import { logBusiness, logError } from '@/lib/logger'
 
-### Security Requirements
-- Input validation with Zod schemas for all API inputs
-- Error responses: `{ error: string }` format
-- No hardcoded credentials anywhere
-- Environment variables server-side only
-- RLS policies on all tables
+// Log important events
+logBusiness('Worker approved', 'USER_MANAGEMENT', { workerId, approvedBy })
 
-## File Structure
+// Log errors in catch blocks
+catch (error) {
+  logError(error as Error, 'CONTEXT', { additionalInfo })
+}
+```
+
+**Standard Contexts**: USER_MANAGEMENT, ORDER_IMPORT, BATCH_TRANSITION, TASK_ASSIGNMENT, QUALITY_CONTROL, AUTH, API_ERROR, DATABASE, PERFORMANCE
+
+**View Logs**: `/manager/logs` (manager role required)
+
+## 🔗 Page Navigation Requirements
+**NEVER create orphaned pages**. Every new page must:
+
+1. **Have a clear access path**:
+   - Main navigation item
+   - Dashboard card/button  
+   - Settings submenu
+   - Parent page link
+
+2. **Follow structure**:
+   - Debug/test pages: `src/app/(debug)/`
+   - Feature pages: Include index/landing page
+   - Multi-page features: Clear navigation between pages
+
+3. **Update navigation**:
+   ```typescript
+   // Always include a task to update navigation
+   // Example: Add to src/components/navigation/main-nav.tsx
+   ```
+
+## 🏗️ Component Patterns
+
+### Server Components (Default)
+- Direct data fetching
+- No useState, useEffect
+- Can be async
+- Use for layouts, pages, data display
+
+### Client Components ('use client')
+- Only when needed for interactivity
+- Hooks and browser APIs
+- Keep as leaf nodes
+- Handle user interactions
+
+### Performance
+```typescript
+// Memoize expensive operations
+const result = useMemo(() => expensiveCalc(data), [data])
+
+// Stable references
+const handleClick = useCallback(() => {}, [deps])
+
+// Lazy load heavy components  
+const Chart = dynamic(() => import('@/components/Chart'))
+```
+
+## 📊 Database Patterns
+- **RLS**: MANDATORY on all tables
+- **Queries**: Type-safe with generated types
+- **Scope**: Always filter by current user/employee
+- **Joins**: Use Supabase's nested selection
+- **Indexes**: Add for RLS policy columns
+
+```typescript
+// Type-safe query
+const { data } = await supabase
+  .from('builds')
+  .select(`
+    *,
+    headphone_model:headphone_models(name),
+    assigned_to:employees(name)
+  `)
+  .eq('assigned_to', employee.id)
+```
+
+## 🛡️ Security Rules
+- Input validation: Zod schemas for ALL inputs
+- Error format: `{ error: string }`
+- No client-side secrets
+- Never trust client data
+- Always use HTTPS
+- Rate limit sensitive endpoints
+
+## 🎨 UI/UX Standards
+- **Mobile-first**: Worker interfaces must work on phones/tablets
+- **Components**: Use shadcn/ui (`npx shadcn@latest add`)
+- **Icons**: Import individually from lucide-react
+- **Colors**: Soft, friendly colors for buttons
+- **Modals**: Contextual positioning, non-intrusive
+- **Dark mode**: Support via CSS variables
+
+## 🚫 Forbidden Patterns
+- `@supabase/auth-helpers-nextjs` (use `@supabase/ssr`)
+- `getSession()` server-side (use `getUser()`)
+- Writing to Shopify (READ-ONLY integration)
+- `any` type in TypeScript
+- Hardcoded IDs or credentials
+- Client-side database access
+- localStorage for sensitive data
+- Orphaned pages without navigation
+
+## 📝 Quick Reference
+```bash
+# Development
+npm run dev          # Start development
+npm run build        # Check for errors before committing
+
+# Database  
+npx supabase gen types typescript > types/database.types.ts
+npx supabase db push # Push migrations
+
+# UI Components
+npx shadcn@latest add [component]
+```
+
+## 🔄 External Integrations
+- **Shopify**: READ-ONLY via Edge Functions
+- **PDF**: Server-side for complex, client for simple
+- **Validate**: All external data server-side
+- **Errors**: Graceful degradation if services fail
+
+## 📁 Project Structure
 ```
 src/
-├── app/
-│   ├── api/              # API routes
-│   ├── worker/           # Worker dashboard
-│   └── manager/          # Manager oversight
-├── components/
-│   ├── ui/               # shadcn/ui components
-│   └── features/         # Feature-specific components
-├── lib/
-│   ├── supabase/         # Auth utilities
-│   └── shopify/          # Read-only Shopify client
-└── types/
-    └── database.ts       # Generated Supabase types
+├── app/              # Pages and API routes
+│   ├── api/         # API endpoints
+│   ├── (debug)/     # Debug pages (not in prod nav)
+│   └── (dashboard)/ # Main app pages
+├── components/      # Reusable components
+├── lib/            # Utilities and configs
+│   ├── supabase/   # Auth clients
+│   └── logger/     # Logging utilities
+└── features/       # Feature modules
 ```
 
-## Design Standards
-- **Mobile-first**: Worker dashboard must work on tablets/phones
-- **Colors**: Soft, friendly colors for buttons and status indicators
-- **Modals**: Contextual positioning, non-intrusive backgrounds
-- **Icons**: Import individually from lucide-react
-- **Components**: Use shadcn/ui patterns exclusively
-- **Accessibility**: Semantic HTML, ARIA labels, keyboard navigation
-
-## Development Workflow
-1. **Database First**: Schema changes go through Supabase migrations
-2. **Type Safety**: Generate types after schema changes
-3. **Testing**: Test auth flows and permissions thoroughly
-4. **Security**: Never trust client-side data for sensitive operations
-5. **Performance**: Use Server Components by default
-
-## Forbidden Patterns
-- Using `@supabase/auth-helpers-nextjs` (use `@supabase/ssr`)
-- Using `getSession()` on server-side (use `getUser()`)
-- Writing to Shopify (READ-ONLY integration only)
-- Hardcoding user IDs or skipping employee validation
-- Using `any` type in TypeScript
-- Direct database access from client components
-- Storing sensitive data in localStorage
-
-## Quick Commands
-```bash
-# Generate types after schema changes
-npx supabase gen types typescript --project-id "$PROJECT_ID" > types/database.types.ts
-
-# Start development
-npm run dev
-
-# Database operations
-npx supabase db push    # Push migrations
-npx supabase db reset   # Reset local database
-```
+---
+**Remember**: When in doubt, ASK. Check `/manager/logs` for debugging. Always run `npm run build` before committing.

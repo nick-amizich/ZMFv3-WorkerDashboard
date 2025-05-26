@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
       // Task completion metrics
       supabase
         .from('work_tasks')
-        .select('id, status, stage, created_at, completed_at, estimated_hours, actual_hours')
+        .select('id, status, stage, created_at, completed_at, time_estimate_minutes, time_spent_minutes')
         .gte('created_at', startDate.toISOString())
         .lte('created_at', endDate.toISOString()),
       
@@ -76,15 +76,13 @@ export async function GET(request: NextRequest) {
       
       // Worker performance metrics
       supabase
-        .from('time_logs')
+        .from('work_logs')
         .select(`
           id,
-          worker_id,
-          stage,
-          duration_minutes,
+          employee_id,
           start_time,
           end_time,
-          worker:workers(name)
+          employee:workers(name)
         `)
         .gte('start_time', startDate.toISOString())
         .lte('start_time', endDate.toISOString())
@@ -115,8 +113,8 @@ export async function GET(request: NextRequest) {
     
     // Calculate efficiency metrics
     const taskEfficiency = taskMetrics.data?.reduce((acc, task) => {
-      if (task.estimated_hours && task.actual_hours) {
-        return acc + (task.estimated_hours / task.actual_hours)
+      if (task.time_estimate_minutes && task.time_spent_minutes) {
+        return acc + (task.time_estimate_minutes / task.time_spent_minutes)
       }
       return acc
     }, 0) || 0
@@ -147,30 +145,24 @@ export async function GET(request: NextRequest) {
     const workerPerformance: Record<string, any> = {}
     
     workerMetrics.data?.forEach(log => {
-      const workerId = log.worker_id
-      const workerName = log.worker?.name || 'Unknown'
+      const workerId = log.employee_id
+      const workerName = log.employee?.name || 'Unknown'
       
       if (!workerPerformance[workerId]) {
         workerPerformance[workerId] = {
           name: workerName,
           totalMinutes: 0,
-          taskCount: 0,
-          stages: {}
+          taskCount: 0
         }
       }
       
-      workerPerformance[workerId].totalMinutes += log.duration_minutes || 0
+      // Calculate duration
+      const start = new Date(log.start_time)
+      const end = new Date(log.end_time)
+      const durationMinutes = (end.getTime() - start.getTime()) / (1000 * 60)
+      
+      workerPerformance[workerId].totalMinutes += durationMinutes
       workerPerformance[workerId].taskCount++
-      
-      if (!workerPerformance[workerId].stages[log.stage]) {
-        workerPerformance[workerId].stages[log.stage] = {
-          minutes: 0,
-          count: 0
-        }
-      }
-      
-      workerPerformance[workerId].stages[log.stage].minutes += log.duration_minutes || 0
-      workerPerformance[workerId].stages[log.stage].count++
     })
     
     // Format worker performance data

@@ -37,23 +37,21 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       // Active workers (with current tasks)
       supabase
-        .from('time_logs')
+        .from('work_logs')
         .select(`
           id,
-          worker_id,
-          stage,
+          employee_id,
           start_time,
           task_id,
-          batch_id,
-          worker:workers(id, name, role)
+          employee:workers(id, name, role)
         `)
         .is('end_time', null),
       
       // Active tasks by stage
       supabase
         .from('work_tasks')
-        .select('id, stage, status, priority, assigned_to_id, created_at, started_at')
-        .in('status', ['assigned', 'in_progress']),
+        .select('id, stage, status, priority, assigned_to_id, created_at, assigned_at')
+        .in('status', ['pending', 'in_progress']),
       
       // Recent stage transitions (last hour)
       supabase
@@ -74,14 +72,14 @@ export async function GET(request: NextRequest) {
       // Current bottlenecks (stages with high wait times)
       supabase
         .from('work_tasks')
-        .select('stage, created_at, started_at')
-        .eq('status', 'assigned')
+        .select('stage, created_at, assigned_at')
+        .eq('status', 'pending')
         .not('stage', 'is', null),
       
       // Today's metrics
       supabase
         .from('work_tasks')
-        .select('id, status, created_at, started_at, completed_at')
+        .select('id, status, created_at, assigned_at, completed_at')
         .gte('created_at', todayStart.toISOString()),
       
       // Recent issues (last 2 hours)
@@ -123,7 +121,7 @@ export async function GET(request: NextRequest) {
       }
       
       tasksByStage[stage].count++
-      if (task.status === 'assigned') tasksByStage[stage].assigned++
+      if (task.status === 'pending') tasksByStage[stage].assigned++
       if (task.status === 'in_progress') tasksByStage[stage].inProgress++
       if (task.priority === 'high' || task.priority === 'urgent') tasksByStage[stage].highPriority++
     })
@@ -174,7 +172,7 @@ export async function GET(request: NextRequest) {
     const todayCompleted = todayMetrics.filter(t => t.status === 'completed').length
     const todayCreated = todayMetrics.length
     const todayInProgress = todayMetrics.filter(t => t.status === 'in_progress').length
-    const todayAssigned = todayMetrics.filter(t => t.status === 'assigned').length
+    const todayAssigned = todayMetrics.filter(t => t.status === 'pending').length
     
     // Calculate throughput (tasks completed per hour today)
     const hoursElapsedToday = (now.getTime() - todayStart.getTime()) / (1000 * 60 * 60)
@@ -182,12 +180,10 @@ export async function GET(request: NextRequest) {
     
     // Format active workers with current task info
     const activeWorkersFormatted = activeWorkersData.map(log => ({
-      workerId: log.worker_id,
-      workerName: log.worker?.name || 'Unknown',
-      currentStage: log.stage,
+      workerId: log.employee_id,
+      workerName: log.employee?.name || 'Unknown',
       minutesActive: Math.floor((now.getTime() - new Date(log.start_time).getTime()) / (1000 * 60)),
-      taskId: log.task_id,
-      batchId: log.batch_id
+      taskId: log.task_id
     }))
     
     const response = {
@@ -222,7 +218,7 @@ export async function GET(request: NextRequest) {
         severity: issue.severity,
         title: issue.title,
         reportedBy: issue.reported_by?.name || 'Unknown',
-        minutesAgo: Math.floor((now.getTime() - new Date(issue.created_at || now.toISOString()).getTime()) / (1000 * 60)),
+        minutesAgo: Math.floor((now.getTime() - new Date(issue.created_at || now).getTime()) / (1000 * 60)),
         status: issue.resolution_status
       })),
       systemHealth: {

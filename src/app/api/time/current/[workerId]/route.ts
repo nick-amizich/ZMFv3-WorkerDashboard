@@ -16,11 +16,11 @@ export async function GET(
     // Get current worker details
     const { data: currentWorker } = await supabase
       .from('workers')
-      .select('id, role, is_active')
+      .select('id, role, active')
       .eq('auth_user_id', user.id)
       .single()
     
-    if (!currentWorker?.is_active) {
+    if (!currentWorker?.active) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
@@ -33,24 +33,19 @@ export async function GET(
     
     // Get the active timer for the worker
     const { data: activeTimer, error: timerError } = await supabase
-      .from('time_logs')
+      .from('work_logs')
       .select(`
         *,
         task:work_tasks(
           id,
-          task_description,
+          custom_notes,
           order_item:order_items(
             product_name,
             order:orders(order_number, customer_name)
           )
-        ),
-        batch:work_batches(
-          id,
-          name,
-          workflow_template:workflow_templates(name)
         )
       `)
-      .eq('worker_id', workerId)
+      .eq('employee_id', workerId)
       .is('end_time', null)
       .single()
     
