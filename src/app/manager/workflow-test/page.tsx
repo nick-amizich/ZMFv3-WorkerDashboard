@@ -145,7 +145,7 @@ export default function WorkflowTestPage() {
             <Card>
               <CardContent className="p-8 text-center">
                 <ClipboardCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">Click "Run Tests" to verify all features</p>
+                <p className="text-muted-foreground">Click &quot;Run Tests&quot; to verify all features</p>
               </CardContent>
             </Card>
           ) : (

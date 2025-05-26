@@ -136,10 +136,14 @@ export function EnhancedProductionFlowBoard({ refreshInterval = 30000 }: Product
     try {
       // Get time logs for this batch
       const timeResponse = await fetch(`/api/time/batch/${batch.id}`)
-      const timeData = timeResponse.ok ? await timeResponse.json() : []
+      if (!timeResponse.ok) {
+        console.warn(`Failed to fetch time logs for batch ${batch.id}:`, timeResponse.status)
+      }
+      const timeData = timeResponse.ok ? await timeResponse.json() : { time_logs: [] }
+      const timeLogs = timeData.time_logs || []
       
       // Calculate time in current stage
-      const currentStageTime = timeData
+      const currentStageTime = timeLogs
         .filter((log: any) => log.stage === batch.current_stage && !log.end_time)
         .reduce((sum: number, log: any) => {
           const startTime = new Date(log.start_time)

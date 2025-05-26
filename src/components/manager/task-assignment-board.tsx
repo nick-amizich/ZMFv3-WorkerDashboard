@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import { useCallback, useMemo, useState, memo } from 'react'
+import { BulkTaskAssignment } from './bulk-task-assignment'
 
 interface Task {
   id: string
@@ -186,8 +187,21 @@ const WorkerColumn = memo(({
 
 WorkerColumn.displayName = 'WorkerColumn'
 
+interface BulkAssignmentFilters {
+  taskType: string
+  productName: string
+  woodType: string
+  material: string
+}
+
 export function TaskAssignmentBoard() {
   const [isDragging, setIsDragging] = useState(false)
+  const [filters, setFilters] = useState<BulkAssignmentFilters>({
+    taskType: 'all',
+    productName: 'all',
+    woodType: 'all',
+    material: 'all'
+  })
   const queryClient = useQueryClient()
   const { toast } = useToast()
   
@@ -215,10 +229,25 @@ export function TaskAssignmentBoard() {
 
   const tasks = useMemo(() => tasksResponse?.tasks || [], [tasksResponse])
   
-  const pendingTasks = useMemo(() => 
+  // Filter unassigned tasks first
+  const unassignedTasks = useMemo(() => 
     tasks.filter((task: Task) => !task.assigned_to),
     [tasks]
   )
+  
+  // Apply the same filtering logic as bulk assignment for visual filtering
+  const pendingTasks = useMemo(() => {
+    return unassignedTasks.filter((task: Task) => {
+      const specs = task.order_item.product_data?.headphone_specs
+      
+      if (filters.taskType !== 'all' && task.task_type !== filters.taskType) return false
+      if (filters.productName !== 'all' && !task.order_item.product_name.toLowerCase().includes(filters.productName.toLowerCase())) return false
+      if (filters.woodType !== 'all' && specs?.wood_type !== filters.woodType) return false
+      if (filters.material !== 'all' && specs?.material !== filters.material) return false
+      
+      return true
+    })
+  }, [unassignedTasks, filters])
 
   const activeWorkers = useMemo(() => 
     workers.filter((w: Worker) => w.role === 'worker').slice(0, 3),
@@ -314,8 +343,21 @@ export function TaskAssignmentBoard() {
   }, [assignTask])
 
   return (
-    <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="space-y-4">
+      {/* Bulk Assignment Controls */}
+      <BulkTaskAssignment 
+        tasks={tasks}
+        workers={workers}
+        filters={filters}
+        onFiltersChange={setFilters}
+        onAssignmentComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ['tasks'] })
+        }}
+      />
+      
+      {/* Drag and Drop Task Board */}
+      <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Unassigned Tasks Column */}
         <Droppable droppableId="unassigned">
           {(provided, snapshot) => (
@@ -323,10 +365,21 @@ export function TaskAssignmentBoard() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-gray-400"></div>
-                  Pending Builds ({pendingTasks.length})
+                  Pending Builds ({pendingTasks.length}
+                  {(filters.taskType !== 'all' || filters.productName !== 'all' || filters.woodType !== 'all' || filters.material !== 'all') && 
+                    ` of ${unassignedTasks.length}`
+                  })
+                  {(filters.taskType !== 'all' || filters.productName !== 'all' || filters.woodType !== 'all' || filters.material !== 'all') && (
+                    <Badge variant="secondary" className="ml-2 text-xs">
+                      Filtered
+                    </Badge>
+                  )}
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Drag tasks to assign to workers
+                  {(filters.taskType !== 'all' || filters.productName !== 'all' || filters.woodType !== 'all' || filters.material !== 'all') 
+                    ? 'Showing filtered tasks - drag to assign or use bulk assignment above'
+                    : 'Drag tasks to assign to workers or use bulk assignment above'
+                  }
                 </p>
               </CardHeader>
               <CardContent 
@@ -334,14 +387,21 @@ export function TaskAssignmentBoard() {
                 {...provided.droppableProps}
                 className="space-y-2 min-h-96"
               >
-                {pendingTasks.map((task: Task, index: number) => (
-                  <TaskCard 
-                    key={task.id}
-                    task={task} 
-                    index={index}
-                    isDragDisabled={assignTask.isPending}
-                  />
-                ))}
+                {pendingTasks.length === 0 && (filters.taskType !== 'all' || filters.productName !== 'all' || filters.woodType !== 'all' || filters.material !== 'all') ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <div className="text-sm">No tasks match current filters</div>
+                    <div className="text-xs mt-1">Try adjusting the filters above</div>
+                  </div>
+                ) : (
+                  pendingTasks.map((task: Task, index: number) => (
+                    <TaskCard 
+                      key={task.id}
+                      task={task} 
+                      index={index}
+                      isDragDisabled={assignTask.isPending}
+                    />
+                  ))
+                )}
                 {provided.placeholder}
               </CardContent>
             </Card>
@@ -357,7 +417,8 @@ export function TaskAssignmentBoard() {
             isDragDisabled={assignTask.isPending}
           />
         ))}
-      </div>
-    </DragDropContext>
+        </div>
+      </DragDropContext>
+    </div>
   )
 }

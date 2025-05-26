@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
     }
     
     const results = {
-      created: [],
-      failed: [],
-      skipped: []
+      created: [] as any[],
+      failed: [] as any[],
+      skipped: [] as any[]
     }
     
     for (const authUser of authUsers) {

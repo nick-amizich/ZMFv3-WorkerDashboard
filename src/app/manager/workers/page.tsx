@@ -253,7 +253,7 @@ export default function WorkersPage() {
           <AlertDescription>
             <strong>How User Approval Works:</strong>
             <br />
-            1. When new users register at <code>/register</code>, they appear here as "Pending Approval"
+            1. When new users register at <code>/register</code>, they appear here as &quot;Pending Approval&quot;
             <br />
             2. You can approve or reject them from this page
             <br />

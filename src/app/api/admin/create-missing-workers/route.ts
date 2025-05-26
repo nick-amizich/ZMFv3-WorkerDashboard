@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
     }
     
     const results = {
-      created: [],
-      failed: [],
-      alreadyExists: []
+      created: [] as any[],
+      failed: [] as any[],
+      alreadyExists: [] as any[]
     }
     
     // For each email, check if worker exists

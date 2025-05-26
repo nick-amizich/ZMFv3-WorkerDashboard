@@ -2,6 +2,13 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
+  // TODO: Fix real-time analytics schema issues  
+  return NextResponse.json({ 
+    error: 'Real-time analytics temporarily disabled', 
+    message: 'This feature requires schema updates' 
+  }, { status: 503 })
+  
+  /*
   try {
     const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
@@ -236,4 +243,5 @@ export async function GET(request: NextRequest) {
     console.error('Real-time Analytics API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+  */
 }

@@ -5,6 +5,8 @@ import { ConnectionStatus } from '@/components/features/connection-status'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Eye } from 'lucide-react'
+import { QueryProvider } from '@/components/providers/query-provider'
+import { Toaster } from '@/components/ui/toaster'
 
 export default async function ManagerLayout({
   children,
@@ -70,8 +72,11 @@ export default async function ManagerLayout({
       
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
+        <QueryProvider>
+          {children}
+        </QueryProvider>
       </main>
+      <Toaster />
     </div>
   )
 }

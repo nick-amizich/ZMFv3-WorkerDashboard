@@ -175,7 +175,7 @@ export default function AuthSyncPage() {
         <AlertDescription>
           <strong>Why you might not see pending users:</strong>
           <br />
-          When users register, they're created in Supabase Auth but sometimes the worker profile fails to create.
+          When users register, they&apos;re created in Supabase Auth but sometimes the worker profile fails to create.
           This page helps you find and fix those orphaned auth users.
         </AlertDescription>
       </Alert>

@@ -71,7 +71,7 @@ WHERE w.id IS NULL;`
       <Alert className="border-amber-200 bg-amber-50">
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          <strong>The Problem:</strong> Users exist in Supabase Auth but don't have entries in the workers table.
+          <strong>The Problem:</strong> Users exist in Supabase Auth but don&apos;t have entries in the workers table.
           This prevents them from being approved or logging in.
         </AlertDescription>
       </Alert>
@@ -80,7 +80,7 @@ WHERE w.id IS NULL;`
         <CardHeader>
           <CardTitle>Solution: Run This SQL in Supabase</CardTitle>
           <CardDescription>
-            This query will create pending worker entries for all auth users that don't have one
+            This query will create pending worker entries for all auth users that don&apos;t have one
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -106,7 +106,7 @@ WHERE w.id IS NULL;`
               <strong>After running the query:</strong>
               <ol className="list-decimal list-inside mt-2 space-y-1">
                 <li>Go to <a href="/manager/users" className="text-blue-600 hover:underline">User Management</a></li>
-                <li>You'll see the new pending approvals</li>
+                <li>You&apos;ll see the new pending approvals</li>
                 <li>Approve each user as needed</li>
               </ol>
             </AlertDescription>

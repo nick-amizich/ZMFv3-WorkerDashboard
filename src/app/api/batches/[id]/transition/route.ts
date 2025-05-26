@@ -5,7 +5,7 @@ import { logError as logErrorUtil, logBusiness } from '@/lib/logger'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const logContext = ApiLogger.logRequest(request)
   
@@ -28,16 +28,20 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const batchId = params.id
-    const { newStage } = await request.json()
+    const { id: batchId } = await params
+    const body = await request.json()
+    const { to_stage, newStage, transition_type, notes } = body
 
-    if (!newStage) {
-      return NextResponse.json({ error: 'New stage is required' }, { status: 400 })
+    // Support both 'to_stage' and 'newStage' for compatibility
+    const targetStage = to_stage || newStage
+
+    if (!targetStage) {
+      return NextResponse.json({ error: 'Target stage is required' }, { status: 400 })
     }
 
     logBusiness('Batch transition initiated', 'BATCH_TRANSITION', {
       batchId,
-      newStage,
+      targetStage,
       initiatedBy: worker.id
     })
 
@@ -71,10 +75,10 @@ export async function POST(
     // Validate new stage exists in workflow - cast stages to proper type
     const stages = workflow.stages as Array<{ stage: string; tasks?: Array<any> }>
     const validStages = stages.map((s: any) => s.stage)
-    if (!validStages.includes(newStage)) {
-      logErrorUtil(new Error(`Invalid stage: ${newStage}`), 'BATCH_TRANSITION', {
+    if (!validStages.includes(targetStage)) {
+      logErrorUtil(new Error(`Invalid stage: ${targetStage}`), 'BATCH_TRANSITION', {
         batchId,
-        newStage,
+        targetStage,
         validStages
       })
       return NextResponse.json({ 
@@ -89,7 +93,7 @@ export async function POST(
     const { error: updateError } = await supabase
       .from('work_batches')
       .update({ 
-        current_stage: newStage,
+        current_stage: targetStage,
         updated_at: new Date().toISOString()
       })
       .eq('id', batchId)
@@ -108,7 +112,7 @@ export async function POST(
       .insert([{
         batch_id: batchId,
         from_stage: currentStage,
-        to_stage: newStage,
+        to_stage: targetStage,
         transitioned_by_id: worker.id,
         transition_time: new Date().toISOString(),
         workflow_template_id: batch.workflow_template_id
@@ -123,12 +127,12 @@ export async function POST(
     }
 
     // Get workflow stage configuration to determine if we need to create tasks
-    const stageConfig = stages.find((s: any) => s.stage === newStage)
+    const stageConfig = stages.find((s: any) => s.stage === targetStage)
     
     if (stageConfig?.tasks && stageConfig.tasks.length > 0) {
       logBusiness('Creating tasks for new stage', 'TASK_CREATION', {
         batchId,
-        stage: newStage,
+        stage: targetStage,
         taskCount: stageConfig.tasks.length
       })
 
@@ -137,7 +141,7 @@ export async function POST(
         id: `${batchId}-${task.type}-${Date.now()}`,
         batch_id: batchId,
         task_type: task.type,
-        stage: newStage,
+        stage: targetStage,
         task_description: task.title || `${task.type} for batch`,
         priority: task.priority || 'normal',
         estimated_hours: (task.estimated_time_minutes || 60) / 60,
@@ -165,12 +169,12 @@ export async function POST(
       .insert([{
         workflow_template_id: batch.workflow_template_id,
         batch_id: batchId,
-        stage: newStage,
+        stage: targetStage,
         action: 'stage_transition',
         action_details: {
           from_stage: currentStage,
-          to_stage: newStage,
-          transition_type: 'manual'
+          to_stage: targetStage,
+          transition_type: transition_type || 'manual'
         },
         executed_by_id: worker.id,
         execution_type: 'manual'
@@ -184,25 +188,25 @@ export async function POST(
     }
 
     // Log successful business operation
-    BusinessLogger.logBatchTransition(batchId, currentStage || 'unknown', newStage, worker.id)
+    BusinessLogger.logBatchTransition(batchId, currentStage || 'unknown', targetStage, worker.id)
 
     const response = NextResponse.json({ 
       success: true, 
       batchId,
       previousStage: currentStage,
-      newStage
+      newStage: targetStage
     })
 
     ApiLogger.logResponse(logContext, response, worker.id, {
       batchId,
-      stageTransition: `${currentStage} -> ${newStage}`
+      stageTransition: `${currentStage} -> ${targetStage}`
     })
 
     return response
 
   } catch (error) {
     logErrorUtil(error as Error, 'BATCH_TRANSITION', {
-      batchId: params.id
+      batchId: 'unknown'
     })
     
     const response = NextResponse.json({ 

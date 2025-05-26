@@ -14,7 +14,7 @@ export default function TasksPage() {
         <div className="flex justify-between items-start">
           <div>
             <h2 className="text-2xl font-bold">Headphone Production</h2>
-            <p className="text-muted-foreground">Assign build tasks to workers • Wood type and specs visible</p>
+            <p className="text-muted-foreground">Assign tasks individually or in bulk • Filter by type, model, or wood type • Wood specs visible</p>
           </div>
           <CreateTaskModal />
         </div>

@@ -16,11 +16,11 @@ export async function GET(
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, active')
+      .select('id, role, is_active, approval_status')
       .eq('auth_user_id', user.id)
       .single()
     
-    if (!worker?.is_active) {
+    if (!worker?.is_active || worker?.approval_status !== 'approved') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
@@ -70,18 +70,18 @@ export async function GET(
     const workerId = url.searchParams.get('worker_id')
     const includeActive = url.searchParams.get('include_active') === 'true'
     
-    // Build query for work logs related to batch tasks
+    // Build query for time logs related to batch tasks
     let query = supabase
-      .from('work_logs')
+      .from('time_logs')
       .select(`
         *,
-        employee:workers(
+        worker:workers(
           id,
           name
         ),
         task:work_tasks(
           id,
-          custom_notes,
+          notes,
           order_item:order_items(
             product_name,
             order:orders(order_number, customer_name)
@@ -93,28 +93,28 @@ export async function GET(
     
     // Apply filters
     if (workerId) {
-      query = query.eq('employee_id', workerId)
+      query = query.eq('worker_id', workerId)
     }
     
     if (!includeActive) {
       query = query.not('end_time', 'is', null)
     }
     
-    // Workers can only see their own work logs unless they're managers
+    // Workers can only see their own time logs unless they're managers
     if (worker.role === 'worker') {
-      query = query.eq('employee_id', worker.id)
+      query = query.eq('worker_id', worker.id)
     }
     
-    const { data: workLogs, error: workLogsError } = await query
+    const { data: timeLogs, error: timeLogsError } = await query
     
-    if (workLogsError) {
-      console.error('Error fetching batch work logs:', workLogsError)
-      return NextResponse.json({ error: 'Failed to fetch work logs' }, { status: 500 })
+    if (timeLogsError) {
+      console.error('Error fetching batch time logs:', timeLogsError)
+      return NextResponse.json({ error: 'Failed to fetch time logs' }, { status: 500 })
     }
     
     // Calculate summary statistics
-    const completedLogs = workLogs?.filter(log => log.end_time) || []
-    const totalMinutes = completedLogs.reduce((sum, log) => {
+    const completedLogs = timeLogs?.filter((log: any) => log.end_time) || []
+    const totalMinutes = completedLogs.reduce((sum: number, log: any) => {
       if (log.start_time && log.end_time) {
         const start = new Date(log.start_time)
         const end = new Date(log.end_time)
@@ -123,10 +123,10 @@ export async function GET(
       }
       return sum
     }, 0)
-    const activeLogs = workLogs?.filter(log => !log.end_time) || []
+    const activeLogs = timeLogs?.filter((log: any) => !log.end_time) || []
     
     const summary = {
-      total_logs: workLogs?.length || 0,
+      total_logs: timeLogs?.length || 0,
       completed_logs: completedLogs.length,
       active_logs: activeLogs.length,
       total_minutes: Math.round(totalMinutes * 100) / 100,
@@ -139,7 +139,7 @@ export async function GET(
         id: batch.id,
         name: batch.name
       },
-      time_logs: workLogs || [],
+      time_logs: timeLogs || [],
       summary
     })
   } catch (error) {
