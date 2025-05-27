@@ -14,9 +14,11 @@ import {
   FileText,
   ChevronDown,
   Zap,
-  Layout
+  Layout,
+  ClipboardList
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +37,7 @@ interface NavItem {
     name: string
     href: string
     description?: string
+    isNew?: boolean
   }>
 }
 
@@ -94,6 +97,12 @@ const navigationItems: NavItem[] = [
         name: 'Component Tracking',
         href: '/manager/components',
         description: 'Track components with QR codes'
+      },
+      {
+        name: 'QC Steps',
+        href: '/manager/qc-steps',
+        description: 'Manage QC production steps for workers',
+        isNew: true
       },
       {
         name: 'Quality Holds',
@@ -267,7 +276,17 @@ export function ManagerNavigationV2() {
                             )}
                           >
                             <div className="flex flex-col">
-                              <span className="font-medium">{child.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{child.name}</span>
+                                {child.isNew && (
+                                  <Badge 
+                                    variant="secondary" 
+                                    className="px-1.5 py-0.5 text-xs bg-green-100 text-green-800 border-green-200 font-semibold"
+                                  >
+                                    NEW
+                                  </Badge>
+                                )}
+                              </div>
                               {child.description && (
                                 <span className="text-xs text-gray-500">{child.description}</span>
                               )}

@@ -1,38 +1,28 @@
-import { Suspense } from 'react'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { QCChecklistClient } from './qc-checklist-client'
+import { redirect } from 'next/navigation'
+import { QCStepsManager } from './qc-steps-manager'
 
-// Force dynamic rendering to always fetch fresh data
-export const dynamic = 'force-dynamic'
-
-export default async function QCChecklistPage() {
+export default async function QCStepsPage() {
   const supabase = await createClient()
+  
+  // Check authentication
   const { data: { user } } = await supabase.auth.getUser()
-
   if (!user) {
     redirect('/login')
   }
 
-  // Get worker data
+  // Check if user is a manager
   const { data: worker } = await supabase
     .from('workers')
-    .select('id, name, role, is_active')
+    .select('id, role, is_active, name')
     .eq('auth_user_id', user.id)
     .single()
 
-  if (!worker || !worker.is_active) {
+  if (!worker?.is_active || worker.role !== 'manager') {
     redirect('/unauthorized')
   }
 
-  // Get all workers for the dropdown
-  const { data: allWorkers } = await supabase
-    .from('workers')
-    .select('id, name')
-    .eq('is_active', true)
-    .order('name')
-
-  // Get production steps from the dedicated table
+  // Get current production steps from dedicated table
   const { data: steps, error } = await supabase
     .from('qc_production_steps' as any)
     .select('value, label, sort_order')
@@ -59,20 +49,15 @@ export default async function QCChecklistPage() {
   const productionSteps = (!error && steps && steps.length > 0) ? steps as any : defaultSteps
 
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+    <div className="container max-w-6xl mx-auto p-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">QC Production Steps Management</h1>
+        <p className="text-muted-foreground mt-2">
+          Manage the production steps available in the Quality Control Checklist system.
+        </p>
       </div>
-    }>
-      <QCChecklistClient 
-        currentWorker={{
-          ...worker,
-          role: worker.role || 'worker',
-          is_active: worker.is_active || false
-        }}
-        allWorkers={allWorkers || []}
-        productionSteps={productionSteps}
-      />
-    </Suspense>
+      
+      <QCStepsManager initialSteps={productionSteps} />
+    </div>
   )
-}
+} 

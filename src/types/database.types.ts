@@ -7,6 +7,31 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          operationName?: string
+          query?: string
+          variables?: Json
+          extensions?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       analytics_refresh_log: {
@@ -1006,6 +1031,74 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      qc_checklist_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean
+          item_text: string
+          production_step_value: string
+          sort_order: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          item_text: string
+          production_step_value: string
+          sort_order?: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          item_text?: string
+          production_step_value?: string
+          sort_order?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qc_checklist_items_production_step_value_fkey"
+            columns: ["production_step_value"]
+            isOneToOne: false
+            referencedRelation: "qc_production_steps"
+            referencedColumns: ["value"]
+          },
+        ]
+      }
+      qc_production_steps: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: []
       }
       qc_results: {
         Row: {
@@ -2835,6 +2928,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

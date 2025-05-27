@@ -11,16 +11,21 @@ import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CheckCircle2, Loader2, ClipboardList, User, AlertCircle } from 'lucide-react'
-import { checklistData } from './checklist-data'
 
 interface Worker {
   id: string
   name: string
 }
 
+interface ProductionStep {
+  value: string
+  label: string
+}
+
 interface QCChecklistClientProps {
   currentWorker: Worker & { role: string, is_active: boolean }
   allWorkers: Worker[]
+  productionSteps: ProductionStep[]
 }
 
 interface ChecklistItem {
@@ -30,7 +35,13 @@ interface ChecklistItem {
   notes?: string
 }
 
-export function QCChecklistClient({ currentWorker, allWorkers }: QCChecklistClientProps) {
+interface DatabaseChecklistItem {
+  id: string
+  item_text: string
+  sort_order: number
+}
+
+export function QCChecklistClient({ currentWorker, allWorkers, productionSteps }: QCChecklistClientProps) {
   const [selectedWorkerId, setSelectedWorkerId] = useState(currentWorker.id)
   const [selectedWorkerName, setSelectedWorkerName] = useState(currentWorker.name)
   const [selectedStep, setSelectedStep] = useState('')
@@ -38,6 +49,7 @@ export function QCChecklistClient({ currentWorker, allWorkers }: QCChecklistClie
   const [overallNotes, setOverallNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [isLoadingChecklist, setIsLoadingChecklist] = useState(false)
   const [productInfo, setProductInfo] = useState({
     model: '',
     serialNumber: '',
@@ -72,18 +84,45 @@ export function QCChecklistClient({ currentWorker, allWorkers }: QCChecklistClie
     localStorage.setItem('qc-checklist-state', JSON.stringify(state))
   }, [selectedStep, checklistItems, overallNotes, productInfo])
 
-  // Update checklist items when step changes
+  // Load checklist items when step changes
   useEffect(() => {
-    if (selectedStep && checklistData[selectedStep]) {
-      const items: ChecklistItem[] = checklistData[selectedStep].map((text, index) => ({
-        id: `${selectedStep}-${index}`,
-        text,
+    if (selectedStep) {
+      loadChecklistItems(selectedStep)
+    } else {
+      setChecklistItems([])
+    }
+  }, [selectedStep])
+
+  const loadChecklistItems = async (stepValue: string) => {
+    setIsLoadingChecklist(true)
+    try {
+      const response = await fetch(`/api/settings/qc-steps/${encodeURIComponent(stepValue)}/checklist`)
+      if (!response.ok) {
+        throw new Error('Failed to load checklist items')
+      }
+      const data = await response.json()
+      
+      // Convert database items to component format
+      const items: ChecklistItem[] = (data.items || []).map((dbItem: DatabaseChecklistItem, index: number) => ({
+        id: `${stepValue}-${index}`,
+        text: dbItem.item_text,
         completed: false,
         notes: ''
       }))
+      
       setChecklistItems(items)
+    } catch (error) {
+      console.error('Error loading checklist items:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load checklist items. Please try again.',
+        variant: 'destructive'
+      })
+      setChecklistItems([])
+    } finally {
+      setIsLoadingChecklist(false)
     }
-  }, [selectedStep])
+  }
 
   const handleWorkerChange = (workerId: string) => {
     const worker = allWorkers.find(w => w.id === workerId)
@@ -179,22 +218,6 @@ export function QCChecklistClient({ currentWorker, allWorkers }: QCChecklistClie
       setIsSubmitting(false)
     }
   }
-
-  const productionSteps = [
-    { value: 'inventory_intake', label: '1. Inventory Intake' },
-    { value: 'sanding_pre_work', label: '2. Sanding - Pre-Work' },
-    { value: 'sanding_post_work', label: '2. Sanding - Post-Work' },
-    { value: 'finishing_pre_work', label: '3. Finishing - Pre-Work' },
-    { value: 'finishing_post_work', label: '3. Finishing - Post-Work' },
-    { value: 'sub_assembly_chassis_pre_work', label: '4. Sub-assembly: Chassis - Pre-Work' },
-    { value: 'sub_assembly_chassis_post_work', label: '4. Sub-assembly: Chassis - Post-Work' },
-    { value: 'sub_assembly_baffle_pre_work', label: '5. Sub-assembly: Baffle - Pre-Work' },
-    { value: 'sub_assembly_baffle_post_work', label: '5. Sub-assembly: Baffle - Post-Work' },
-    { value: 'final_production', label: '6. Final Production' },
-    { value: 'final_assembly', label: '6.5 Final Assembly' },
-    { value: 'acoustic_aesthetic_qc', label: '7. Acoustic and Aesthetic QC' },
-    { value: 'shipping', label: '8. Shipping' }
-  ]
 
   const completedCount = checklistItems.filter(item => item.completed).length
   const totalCount = checklistItems.length
@@ -347,8 +370,20 @@ export function QCChecklistClient({ currentWorker, allWorkers }: QCChecklistClie
           </Card>
         )}
 
+        {/* Loading State */}
+        {selectedStep && isLoadingChecklist && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span>Loading checklist items...</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Checklist Items */}
-        {selectedStep && checklistItems.length > 0 && (
+        {selectedStep && !isLoadingChecklist && checklistItems.length > 0 && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <div>
@@ -426,6 +461,16 @@ export function QCChecklistClient({ currentWorker, allWorkers }: QCChecklistClie
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* No Checklist Items */}
+        {selectedStep && !isLoadingChecklist && checklistItems.length === 0 && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              No checklist items are configured for this production step. Please contact a manager to set up the checklist.
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Submit Button */}
