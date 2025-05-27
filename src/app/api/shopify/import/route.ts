@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
         message: `Successfully imported ${result.itemsCreated} items with ${result.tasksCreated} tasks`,
         itemsCreated: result.itemsCreated,
         tasksCreated: result.tasksCreated,
+        orderItems: 'orderItems' in result ? result.orderItems : [],
         details: result.details
       })
     } else {

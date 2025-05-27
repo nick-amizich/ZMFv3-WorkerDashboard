@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, active')
+      .select('id, is_active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const { data: activeTimer } = await supabase
       .from('work_logs')
       .select('id')
-      .eq('employee_id', worker.id)
+      .eq('worker_id', worker.id)
       .is('end_time', null)
       .single()
     
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const { data: workLog, error: createError } = await supabase
       .from('work_logs')
       .insert({
-        employee_id: worker.id,
+        worker_id: worker.id,
         task_id,
         start_time: new Date().toISOString()
       })

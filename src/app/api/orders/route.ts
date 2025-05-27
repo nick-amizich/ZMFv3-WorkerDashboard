@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
     
     // Check if we want available items for batch creation
     if (url.searchParams.get('status') === 'pending') {
+      const limit = parseInt(url.searchParams.get('limit') || '50')
+      
       // Get all order items that are not yet in a batch
       const { data: batchedItems } = await supabase
         .from('work_batches')
@@ -56,6 +58,8 @@ export async function GET(request: NextRequest) {
           product_name,
           variant_title,
           quantity,
+          headphone_material,
+          headphone_color,
           orders!inner (
             shopify_order_id,
             customer_name,
@@ -63,6 +67,7 @@ export async function GET(request: NextRequest) {
           )
         `)
         .order('created_at', { ascending: false })
+        .limit(limit * 2) // Get more than needed to account for filtering
       
       if (itemsError) {
         console.error('Error fetching order items:', itemsError)
@@ -72,18 +77,18 @@ export async function GET(request: NextRequest) {
       // Filter out items already in batches and format the response
       const availableItems = (orderItems || [])
         .filter(item => !batchedItemIds.has(item.id))
+        .slice(0, limit) // Apply the limit after filtering
         .map(item => ({
           id: item.id,
           order_id: item.order_id,
           sku: item.sku,
-          title: item.product_name || 'Unknown Product',
-          model_name: item.variant_title?.includes('Model:') ? 
-            item.variant_title.split('Model:')[1]?.split(',')[0]?.trim() : null,
-          wood_type: item.variant_title?.includes('Wood:') ? 
-            item.variant_title.split('Wood:')[1]?.split(',')[0]?.trim() : null,
+          product_name: item.product_name || 'Unknown Product',
+          variant_title: item.variant_title,
           quantity: item.quantity,
           shopify_order_name: item.orders?.order_number || 'Unknown',
-          customer_name: item.orders?.customer_name
+          customer_name: item.orders?.customer_name || 'Unknown Customer',
+          material: item.headphone_material,
+          color: item.headphone_color
         }))
       
       return NextResponse.json({ items: availableItems })

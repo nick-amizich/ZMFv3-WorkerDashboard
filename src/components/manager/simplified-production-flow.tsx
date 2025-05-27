@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
 import { 
   Package, 
@@ -32,8 +32,10 @@ import {
   ArrowRight,
   Eye,
   Settings,
-  Zap
+  Zap,
+  XCircle
 } from 'lucide-react'
+import { Label } from '@/components/ui/label'
 
 interface Batch {
   id: string
@@ -88,6 +90,8 @@ export function SimplifiedProductionFlow({ refreshInterval = 30000 }: Simplified
   const [showBatchDetails, setShowBatchDetails] = useState(false)
   const [showCreateBatch, setShowCreateBatch] = useState(false)
   const [selectedWorkflow, setSelectedWorkflow] = useState<string>('all')
+  const [showCleanupDialog, setShowCleanupDialog] = useState(false)
+  const [cleaningUp, setCleaningUp] = useState(false)
 
   // Fetch batches
   const { data: batchesData, isLoading: batchesLoading } = useQuery({
@@ -242,14 +246,87 @@ export function SimplifiedProductionFlow({ refreshInterval = 30000 }: Simplified
     ).length
     const bottlenecks = stageColumns.filter(stage => stage.batches.length > 5).length
     const totalItems = filteredBatches.reduce((sum: number, b: Batch) => sum + (b._stats?.total_items || 0), 0)
+    
+    // Calculate potentially orphaned batches (old batches with no recent activity)
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const orphanedBatches = filteredBatches.filter((b: Batch) => 
+      new Date(b.updated_at) < thirtyDaysAgo && 
+      b.status !== 'completed' &&
+      (!b.order_item_ids || b.order_item_ids.length === 0)
+    ).length
 
     return {
       activeBatches,
       completedToday,
       bottlenecks,
-      totalItems
+      totalItems,
+      orphanedBatches
     }
   }, [filteredBatches, stageColumns])
+
+  // Cleanup orphaned batches
+  const cleanupOrphanedBatches = async () => {
+    setCleaningUp(true)
+    try {
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      
+      // Identify orphaned batches
+      const orphanedBatches = filteredBatches.filter((b: Batch) => 
+        new Date(b.updated_at) < thirtyDaysAgo && 
+        b.status !== 'completed' &&
+        (!b.order_item_ids || b.order_item_ids.length === 0)
+      )
+
+      if (orphanedBatches.length === 0) {
+        toast({
+          title: 'No orphaned batches found',
+          description: 'All batches appear to be valid or recently active'
+        })
+        setShowCleanupDialog(false)
+        return
+      }
+
+      // Delete each orphaned batch
+      let deleted = 0
+      let failed = 0
+      
+      for (const batch of orphanedBatches) {
+        try {
+          const response = await fetch(`/api/batches/${batch.id}`, {
+            method: 'DELETE'
+          })
+          
+          if (response.ok) {
+            deleted++
+          } else {
+            failed++
+          }
+        } catch (error) {
+          failed++
+        }
+      }
+
+      toast({
+        title: 'Cleanup completed',
+        description: `Deleted ${deleted} orphaned batches. ${failed > 0 ? `${failed} failed to delete.` : ''}`
+      })
+
+      // Refresh the batches list
+      queryClient.invalidateQueries({ queryKey: ['production-batches'] })
+      setShowCleanupDialog(false)
+      
+    } catch (error) {
+      toast({
+        title: 'Cleanup failed',
+        description: 'Failed to clean up orphaned batches',
+        variant: 'destructive'
+      })
+    } finally {
+      setCleaningUp(false)
+    }
+  }
 
   if (batchesLoading) {
     return (
@@ -290,6 +367,17 @@ export function SimplifiedProductionFlow({ refreshInterval = 30000 }: Simplified
             <Plus className="h-4 w-4 mr-2" />
             Create Batch
           </Button>
+          
+          {overallStats.orphanedBatches > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={() => setShowCleanupDialog(true)}
+              className="text-orange-600 border-orange-200 hover:bg-orange-50"
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Clean Up ({overallStats.orphanedBatches})
+            </Button>
+          )}
           
           <Button 
             variant="outline" 
@@ -345,8 +433,12 @@ export function SimplifiedProductionFlow({ refreshInterval = 30000 }: Simplified
             <div className="flex items-center space-x-2">
               <Users className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-sm text-gray-600">Total Items</p>
-                <p className="text-2xl font-bold">{overallStats.totalItems}</p>
+                <p className="text-sm text-gray-600">
+                  {overallStats.orphanedBatches > 0 ? 'Orphaned Batches' : 'Total Items'}
+                </p>
+                <p className={`text-2xl font-bold ${overallStats.orphanedBatches > 0 ? 'text-orange-600' : ''}`}>
+                  {overallStats.orphanedBatches > 0 ? overallStats.orphanedBatches : overallStats.totalItems}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -402,7 +494,7 @@ export function SimplifiedProductionFlow({ refreshInterval = 30000 }: Simplified
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className={`cursor-move transition-transform ${
+                              className={`cursor-move transition-transform group ${
                                 snapshot.isDragging ? 'rotate-1 shadow-lg scale-105' : 'hover:shadow-md'
                               }`}
                               onClick={() => {
@@ -416,12 +508,26 @@ export function SimplifiedProductionFlow({ refreshInterval = 30000 }: Simplified
                                 <div className="space-y-2">
                                   <div className="flex items-center justify-between">
                                     <h4 className="font-medium text-sm truncate">{batch.name}</h4>
-                                    <Badge 
-                                      variant={batch.status === 'active' ? 'default' : 'secondary'}
-                                      className="text-xs"
-                                    >
-                                      {batch.status}
-                                    </Badge>
+                                    <div className="flex items-center space-x-1">
+                                      <Badge 
+                                        variant={batch.status === 'active' ? 'default' : 'secondary'}
+                                        className="text-xs"
+                                      >
+                                        {batch.status}
+                                      </Badge>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setSelectedBatch(batch)
+                                          setShowBatchDetails(true)
+                                        }}
+                                      >
+                                        <XCircle className="h-3 w-3 text-red-500" />
+                                      </Button>
+                                    </div>
                                   </div>
                                   
                                   <div className="text-xs text-gray-600">
@@ -457,10 +563,13 @@ export function SimplifiedProductionFlow({ refreshInterval = 30000 }: Simplified
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Batch Details: {selectedBatch?.name}</DialogTitle>
+            <DialogDescription>
+              View batch information, timeline, and manage batch settings
+            </DialogDescription>
           </DialogHeader>
           
           {selectedBatch && (
-            <BatchDetailsView batch={selectedBatch} />
+            <BatchDetailsView batch={selectedBatch} onClose={() => setShowBatchDetails(false)} />
           )}
         </DialogContent>
       </Dialog>
@@ -470,6 +579,9 @@ export function SimplifiedProductionFlow({ refreshInterval = 30000 }: Simplified
         <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Create New Batch</DialogTitle>
+            <DialogDescription>
+              Group orders into batches for efficient production workflow management
+            </DialogDescription>
           </DialogHeader>
           
           <CreateBatchForm 
@@ -481,12 +593,108 @@ export function SimplifiedProductionFlow({ refreshInterval = 30000 }: Simplified
           />
         </DialogContent>
       </Dialog>
+
+      {/* Cleanup Orphaned Batches Dialog */}
+      <Dialog open={showCleanupDialog} onOpenChange={setShowCleanupDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clean Up Orphaned Batches</DialogTitle>
+            <DialogDescription>
+              Remove old batches that appear to be orphaned or have no valid order items
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-orange-800">This will delete batches that:</p>
+                  <ul className="mt-2 list-disc list-inside text-orange-700 space-y-1">
+                    <li>Haven't been updated in the last 30 days</li>
+                    <li>Are not marked as completed</li>
+                    <li>Have no order items or empty order item lists</li>
+                    <li>Are likely orphaned from deleted builds/orders</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-600">
+              <strong>Orphaned batches found:</strong> {overallStats.orphanedBatches}<br />
+              <strong>This action cannot be undone.</strong>
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button variant="outline" onClick={() => setShowCleanupDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={cleanupOrphanedBatches}
+              disabled={cleaningUp}
+            >
+              {cleaningUp ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Cleaning up...
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Clean Up {overallStats.orphanedBatches} Batches
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
 // Batch Details Component
-function BatchDetailsView({ batch }: { batch: Batch }) {
+function BatchDetailsView({ batch, onClose }: { batch: Batch; onClose?: () => void }) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+
+  const deleteBatch = async () => {
+    setDeleting(true)
+    try {
+      const response = await fetch(`/api/batches/${batch.id}`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to delete batch')
+      }
+      
+      const result = await response.json()
+      toast({
+        title: 'Batch deleted successfully',
+        description: result.message || 'The batch and all related data have been cleaned up'
+      })
+      
+      // Refresh the batches list and close both dialogs
+      queryClient.invalidateQueries({ queryKey: ['production-batches'] })
+      setShowDeleteConfirm(false)
+      onClose?.() // Close the parent batch details dialog
+      
+    } catch (error) {
+      toast({
+        title: 'Failed to delete batch',
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        variant: 'destructive'
+      })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
@@ -527,30 +735,503 @@ function BatchDetailsView({ batch }: { batch: Batch }) {
           <Settings className="h-4 w-4 mr-2" />
           Edit Batch
         </Button>
+        <Button 
+          variant="destructive" 
+          size="sm"
+          onClick={() => setShowDeleteConfirm(true)}
+        >
+          <XCircle className="h-4 w-4 mr-2" />
+          Delete Batch
+        </Button>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Batch</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this batch? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-yellow-800">This will:</p>
+                  <ul className="mt-2 list-disc list-inside text-yellow-700 space-y-1">
+                    <li>Delete the batch permanently</li>
+                    <li>Remove all stage transition history</li>
+                    <li>Remove all workflow execution logs</li>
+                    <li>Unlink any completed tasks (but keep them as historical records)</li>
+                    <li>Prevent deletion if there are active tasks</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-sm text-gray-600">
+              <strong>Batch:</strong> {batch.name}<br />
+              <strong>Items:</strong> {batch._stats?.total_items || 0}<br />
+              <strong>Status:</strong> {batch.status}
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={deleteBatch}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Delete Batch
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-// Create Batch Form Component (simplified for now)
+// Create Batch Form Component
 function CreateBatchForm({ workflows, onSuccess }: { workflows: any[]; onSuccess: () => void }) {
+  const [batchName, setBatchName] = useState('')
+  const [selectedWorkflow, setSelectedWorkflow] = useState('')
+  const [batchType, setBatchType] = useState('production')
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+  const [batchCreationType, setBatchCreationType] = useState<'orders' | 'stock'>('orders')
+  
+  // Stock batch configuration
+  const [stockConfig, setStockConfig] = useState({
+    model: '',
+    woodType: '',
+    padType: '',
+    cableType: '',
+    quantity: 1,
+    description: ''
+  })
+  
+  const { toast } = useToast()
+
+  // Fetch available orders for batch creation
+  const { data: availableOrdersData, isLoading: ordersLoading } = useQuery({
+    queryKey: ['available-orders'],
+    queryFn: async () => {
+      const response = await fetch('/api/orders?status=pending&limit=50')
+      if (!response.ok) throw new Error('Failed to fetch orders')
+      return response.json()
+    }
+  })
+
+  const availableOrders = availableOrdersData?.items || []
+
+  const handleCreateBatch = async () => {
+    // Validation based on batch creation type
+    if (!batchName || !selectedWorkflow) {
+      toast({
+        title: 'Missing information',
+        description: 'Please enter a batch name and select a workflow template',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    if (batchCreationType === 'orders' && selectedOrders.length === 0) {
+      toast({
+        title: 'No orders selected',
+        description: 'Please select at least one order for the batch',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    if (batchCreationType === 'stock' && (!stockConfig.model || !stockConfig.woodType || stockConfig.quantity < 1)) {
+      toast({
+        title: 'Missing stock configuration',
+        description: 'Please configure the stock model, wood type, and quantity',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setLoading(true)
+    try {
+      let batchData: any = {
+        name: batchName,
+        batch_type: batchCreationType === 'stock' ? 'stock' : batchType,
+        workflow_template_id: selectedWorkflow,
+      }
+
+      if (batchCreationType === 'orders') {
+        batchData.order_item_ids = selectedOrders
+        batchData.notes = `Created from production flow - ${selectedOrders.length} customer orders`
+      } else {
+        // For stock batches, we'll create placeholder order items
+        batchData.stock_config = stockConfig
+        batchData.notes = `Stock batch: ${stockConfig.quantity}x ${stockConfig.model} ${stockConfig.woodType} - ${stockConfig.description || 'No description'}`
+      }
+
+      const response = await fetch('/api/batches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batchData)
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create batch')
+      }
+
+      const newBatch = await response.json()
+      const itemCount = batchCreationType === 'orders' ? selectedOrders.length : stockConfig.quantity
+      
+      toast({
+        title: 'Batch created successfully',
+        description: `${batchCreationType === 'stock' ? 'Stock batch' : 'Batch'} "${batchName}" created with ${itemCount} items`
+      })
+      onSuccess()
+    } catch (error) {
+      toast({
+        title: 'Failed to create batch',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (ordersLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <RefreshCw className="h-5 w-5 animate-spin mr-2" />
+        Loading available orders...
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-4">
-      <p className="text-gray-600">
-        Batch creation form will be implemented here. This will allow:
-      </p>
-      <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-        <li>Select orders to include in the batch</li>
-        <li>Choose batch criteria (model, wood type, etc.)</li>
-        <li>Assign workflow template</li>
-        <li>Set initial stage and priority</li>
-      </ul>
-      <div className="flex justify-end space-x-2">
+    <div className="space-y-6">
+      {/* Batch Creation Type Selection */}
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>Batch Creation Type</Label>
+          <div className="flex space-x-4">
+            <Button
+              variant={batchCreationType === 'orders' ? 'default' : 'outline'}
+              onClick={() => setBatchCreationType('orders')}
+              className="flex-1"
+            >
+              <Package className="h-4 w-4 mr-2" />
+              Customer Orders
+            </Button>
+            <Button
+              variant={batchCreationType === 'stock' ? 'default' : 'outline'}
+              onClick={() => setBatchCreationType('stock')}
+              className="flex-1"
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              Stock Models
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {batchCreationType === 'orders' 
+              ? 'Create batches from existing customer orders'
+              : 'Create stock batches for common models built ahead of orders'
+            }
+          </p>
+        </div>
+      </div>
+
+      {/* Batch Configuration */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="batch-name">Batch Name</Label>
+          <Input
+            id="batch-name"
+            placeholder={batchCreationType === 'stock' 
+              ? "e.g., Stock Aeon Cherry - Week 47" 
+              : "e.g., Customer Orders - Week 47"
+            }
+            value={batchName}
+            onChange={(e) => setBatchName(e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="workflow">Workflow Template</Label>
+          <Select value={selectedWorkflow} onValueChange={setSelectedWorkflow}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select workflow template" />
+            </SelectTrigger>
+            <SelectContent>
+              {workflows.map((workflow: any) => (
+                <SelectItem key={workflow.id} value={workflow.id}>
+                  {workflow.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Conditional Batch Type Selection (only for customer orders) */}
+      {batchCreationType === 'orders' && (
+        <div className="space-y-2">
+          <Label htmlFor="batch-type">Priority/Type</Label>
+          <Select value={batchType} onValueChange={setBatchType}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="production">Standard Production</SelectItem>
+              <SelectItem value="rush">Rush Order</SelectItem>
+              <SelectItem value="sample">Sample/Prototype</SelectItem>
+              <SelectItem value="rework">Rework</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Conditional Content Based on Batch Type */}
+      {batchCreationType === 'orders' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label>Select Orders for Batch</Label>
+            <Badge variant="outline">
+              {selectedOrders.length} selected
+            </Badge>
+          </div>
+
+          <div className="border rounded-lg max-h-64 overflow-y-auto">
+            {availableOrders.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>No pending orders available for batching</p>
+                <p className="text-sm mt-2">Try importing orders from the Orders page first</p>
+              </div>
+            ) : (
+              <div className="space-y-1 p-2">
+                {availableOrders.map((order: any) => (
+                  <div
+                    key={order.id}
+                    className={`p-3 rounded cursor-pointer border transition-colors ${
+                      selectedOrders.includes(order.id)
+                        ? 'bg-blue-50 border-blue-200'
+                        : 'hover:bg-gray-50 border-transparent'
+                    }`}
+                    onClick={() => {
+                      setSelectedOrders(prev =>
+                        prev.includes(order.id)
+                          ? prev.filter(id => id !== order.id)
+                          : [...prev, order.id]
+                      )
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">
+                          {order.shopify_order_name} - {order.customer_name}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {order.title} • Qty: {order.quantity}
+                        </div>
+                        {order.model_name && (
+                          <div className="text-xs text-gray-500">
+                            Model: {order.model_name}
+                            {order.wood_type && ` • Wood: ${order.wood_type}`}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        SKU: {order.sku}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {availableOrders.length > 0 && (
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setSelectedOrders(availableOrders.map((o: any) => o.id))}
+              >
+                Select All
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setSelectedOrders([])}
+              >
+                Clear Selection
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stock Batch Configuration */}
+      {batchCreationType === 'stock' && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start space-x-3">
+              <Zap className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-blue-800">Stock Batch Configuration</p>
+                <p className="text-blue-700 mt-1">
+                  Create batches for popular models to build ahead of orders. These help maintain inventory and reduce customer wait times.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="stock-model">Model</Label>
+              <Select 
+                value={stockConfig.model} 
+                onValueChange={(value) => setStockConfig(prev => ({ ...prev, model: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select headphone model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Auteur">ZMF Auteur</SelectItem>
+                  <SelectItem value="Verite">ZMF Verite</SelectItem>
+                  <SelectItem value="Aeon">ZMF Aeon</SelectItem>
+                  <SelectItem value="Atticus">ZMF Atticus</SelectItem>
+                  <SelectItem value="Eikon">ZMF Eikon</SelectItem>
+                  <SelectItem value="Aeolus">ZMF Aeolus</SelectItem>
+                  <SelectItem value="Caldera">ZMF Caldera</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stock-wood">Wood Type</Label>
+              <Select 
+                value={stockConfig.woodType} 
+                onValueChange={(value) => setStockConfig(prev => ({ ...prev, woodType: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select wood type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Cherry">Cherry</SelectItem>
+                  <SelectItem value="Walnut">Walnut</SelectItem>
+                  <SelectItem value="Ebony">Ebony</SelectItem>
+                  <SelectItem value="Maple">Maple</SelectItem>
+                  <SelectItem value="Mahogany">Mahogany</SelectItem>
+                  <SelectItem value="Blackwood">Blackwood</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stock-pads">Pad Type</Label>
+              <Select 
+                value={stockConfig.padType} 
+                onValueChange={(value) => setStockConfig(prev => ({ ...prev, padType: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select pad type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Leather">Leather</SelectItem>
+                  <SelectItem value="Suede">Suede</SelectItem>
+                  <SelectItem value="Vegan">Vegan</SelectItem>
+                  <SelectItem value="Perforated">Perforated Leather</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stock-cable">Cable Type</Label>
+              <Select 
+                value={stockConfig.cableType} 
+                onValueChange={(value) => setStockConfig(prev => ({ ...prev, cableType: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select cable type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1/4">1/4" TRS</SelectItem>
+                  <SelectItem value="XLR">4-pin XLR</SelectItem>
+                  <SelectItem value="3.5mm">3.5mm</SelectItem>
+                  <SelectItem value="1/8">1/8" (3.5mm)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="stock-quantity">Quantity</Label>
+              <Input
+                id="stock-quantity"
+                type="number"
+                min="1"
+                max="20"
+                value={stockConfig.quantity}
+                onChange={(e) => setStockConfig(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="stock-description">Description (Optional)</Label>
+              <Input
+                id="stock-description"
+                placeholder="e.g., Popular holiday configuration"
+                value={stockConfig.description}
+                onChange={(e) => setStockConfig(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <div className="flex justify-end space-x-2 pt-4 border-t">
         <Button variant="outline" onClick={onSuccess}>
           Cancel
         </Button>
-        <Button onClick={onSuccess}>
-          Create Batch
+        <Button 
+          onClick={handleCreateBatch}
+          disabled={loading || !batchName || !selectedWorkflow || 
+            (batchCreationType === 'orders' && selectedOrders.length === 0) ||
+            (batchCreationType === 'stock' && (!stockConfig.model || !stockConfig.woodType || stockConfig.quantity < 1))
+          }
+        >
+          {loading ? (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4 mr-2" />
+              Create {batchCreationType === 'stock' ? 'Stock' : ''} Batch
+            </>
+          )}
         </Button>
       </div>
     </div>

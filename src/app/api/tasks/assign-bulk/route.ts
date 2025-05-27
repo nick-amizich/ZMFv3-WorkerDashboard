@@ -1,20 +1,17 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { ApiLogger } from '@/lib/api-logger'
 import { logBusiness, logError } from '@/lib/logger'
 
-const bulkAssignSchema = z.object({
-  workerId: z.string().uuid().nullable(),
-  filters: z.object({
-    taskType: z.string().optional(),
-    productName: z.string().optional(),
-    woodType: z.string().optional(),
-    material: z.string().optional(),
-    taskIds: z.array(z.string().uuid()).optional() // For explicit task selection
-  }),
-  assignmentMode: z.enum(['all', 'selected']).default('all')
-})
+interface BulkTaskAssignment {
+  order_item_id: string
+  assigned_to_id: string
+  task_type: string
+  task_description?: string
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  status?: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'blocked'
+  estimated_hours?: number
+}
 
 export async function POST(request: NextRequest) {
   const logContext = ApiLogger.logRequest(request)
@@ -24,155 +21,181 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error } = await supabase.auth.getUser()
     
     if (error || !user) {
-      const errorResponse = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      ApiLogger.logResponse(logContext, errorResponse, 'Auth failed in bulk task assignment')
-      return errorResponse
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    // Validate manager role
-    const { data: manager } = await supabase
+    // Validate employee status and role
+    const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, is_active, approval_status')
+      .select('id, role, is_active')
       .eq('auth_user_id', user.id)
       .single()
     
-    if (!manager?.is_active || !['manager', 'supervisor'].includes(manager.role || '')) {
-      logError(new Error('Unauthorized bulk task assignment attempt'), 'TASK_ASSIGNMENT', {
-        userId: user.id,
-        managerRole: manager?.role,
-        isActive: manager?.is_active
-      })
-      const errorResponse = NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-      ApiLogger.logResponse(logContext, errorResponse, 'Permission denied for bulk assignment')
-      return errorResponse
+    if (!worker?.is_active) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
-    // Validate request body
+    // Only managers can assign tasks in bulk
+    if (!['manager', 'supervisor'].includes(worker.role || '')) {
+      return NextResponse.json({ error: 'Forbidden: Only managers can assign tasks in bulk' }, { status: 403 })
+    }
+    
     const body = await request.json()
-    const { workerId, filters, assignmentMode } = bulkAssignSchema.parse(body)
+    const { tasks } = body as { tasks: BulkTaskAssignment[] }
     
-    let tasksQuery = supabase
-      .from('work_tasks')
-      .select(`
-        id,
-        task_type,
-        status,
-        order_item:order_items!inner(
-          id,
-          product_name,
-          product_data
-        )
-      `)
-      .eq('status', 'pending')
-      .is('assigned_to_id', null)
+    // Validate required fields
+    if (!tasks || !Array.isArray(tasks) || tasks.length === 0) {
+      return NextResponse.json({ 
+        error: 'Missing required field: tasks array is required' 
+      }, { status: 400 })
+    }
     
-    // Apply filters based on assignment mode
-    if (assignmentMode === 'selected' && filters.taskIds?.length) {
-      tasksQuery = tasksQuery.in('id', filters.taskIds)
-    } else {
-      // Apply filter criteria for 'all' mode
-      if (filters.taskType) {
-        tasksQuery = tasksQuery.eq('task_type', filters.taskType)
-      }
-      
-      if (filters.productName) {
-        tasksQuery = tasksQuery.ilike('order_item.product_name', `%${filters.productName}%`)
+    // Validate each task
+    for (const task of tasks) {
+      if (!task.order_item_id || !task.assigned_to_id || !task.task_type) {
+        return NextResponse.json({ 
+          error: 'Each task must have order_item_id, assigned_to_id, and task_type' 
+        }, { status: 400 })
       }
     }
     
-    const { data: tasks, error: queryError } = await tasksQuery
+    logBusiness('Bulk task assignment initiated', 'TASK_ASSIGNMENT', {
+      taskCount: tasks.length,
+      assignedBy: worker.id,
+      taskTypes: [...new Set(tasks.map(t => t.task_type))]
+    })
     
-    if (queryError) {
-      logError(queryError, 'DATABASE', { filters, assignmentMode })
-      const errorResponse = NextResponse.json({ error: 'Failed to fetch tasks' }, { status: 400 })
-      ApiLogger.logResponse(logContext, errorResponse, 'Database query failed')
-      return errorResponse
-    }
+    // Verify all order items exist
+    const orderItemIds = tasks.map(task => task.order_item_id)
+    const { data: orderItems, error: orderItemsError } = await supabase
+      .from('order_items')
+      .select('id, product_name')
+      .in('id', orderItemIds)
     
-    // Further filter by wood type or material if specified (requires JSON filtering)
-    let filteredTasks = tasks || []
-    if (filters.woodType || filters.material) {
-      filteredTasks = filteredTasks.filter(task => {
-        const orderItem = task.order_item as any
-        const specs = orderItem?.product_data?.headphone_specs
-        
-        if (filters.woodType && specs?.wood_type !== filters.woodType) {
-          return false
-        }
-        if (filters.material && specs?.material !== filters.material) {
-          return false
-        }
-        return true
+    if (orderItemsError) {
+      logError(new Error(`Error verifying order items: ${orderItemsError.message}`), 'TASK_ASSIGNMENT', {
+        orderItemIds,
+        error: orderItemsError
       })
+      return NextResponse.json({ error: 'Failed to verify order items' }, { status: 500 })
     }
     
-    if (filteredTasks.length === 0) {
-      const response = NextResponse.json({ 
-        message: 'No tasks found matching the specified criteria',
-        tasksAssigned: 0 
+    if (!orderItems || orderItems.length !== orderItemIds.length) {
+      return NextResponse.json({ 
+        error: 'Some order items do not exist' 
+      }, { status: 400 })
+    }
+    
+    // Verify all workers exist and are active
+    const workerIds = [...new Set(tasks.map(task => task.assigned_to_id))]
+    const { data: workers, error: workersError } = await supabase
+      .from('workers')
+      .select('id, name, is_active')
+      .in('id', workerIds)
+    
+    if (workersError) {
+      logError(new Error(`Error verifying workers: ${workersError.message}`), 'TASK_ASSIGNMENT', {
+        workerIds,
+        error: workersError
       })
-      ApiLogger.logResponse(logContext, response, 'No matching tasks found')
-      return response
+      return NextResponse.json({ error: 'Failed to verify workers' }, { status: 500 })
     }
     
-    // Bulk update all matching tasks
-    const taskIds = filteredTasks.map(task => task.id)
-    const updateData: any = {
-      assigned_by_id: manager.id,
-      status: workerId ? 'assigned' : 'pending',
+    if (!workers || workers.length !== workerIds.length) {
+      return NextResponse.json({ 
+        error: 'Some workers do not exist' 
+      }, { status: 400 })
+    }
+    
+    const inactiveWorkers = workers.filter(w => !w.is_active)
+    if (inactiveWorkers.length > 0) {
+      return NextResponse.json({ 
+        error: `Some workers are inactive: ${inactiveWorkers.map(w => w.name).join(', ')}` 
+      }, { status: 400 })
+    }
+    
+    // Create tasks in bulk
+    const tasksToCreate = tasks.map(task => ({
+      order_item_id: task.order_item_id,
+      assigned_to_id: task.assigned_to_id,
+      assigned_by_id: worker.id,
+      task_type: task.task_type,
+      task_description: task.task_description || `${task.task_type} task for order item`,
+      priority: task.priority || 'normal',
+      status: task.status || 'assigned',
+      estimated_hours: task.estimated_hours || 2.0, // Default 2 hours for sanding
+      manual_assignment: true, // Mark as manually assigned
+      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
-    }
+    }))
     
-    if (workerId) {
-      updateData.assigned_to_id = workerId
-    } else {
-      updateData.assigned_to_id = null
-    }
-    
-    const { data: updatedTasks, error: updateError } = await supabase
+    const { data: createdTasks, error: createError } = await supabase
       .from('work_tasks')
-      .update(updateData)
-      .in('id', taskIds)
-      .select()
+      .insert(tasksToCreate)
+      .select(`
+        *,
+        assigned_to:workers!work_tasks_assigned_to_id_fkey(id, name),
+        order_item:order_items(id, product_name, orders!inner(order_number, customer_name))
+      `)
     
-    if (updateError) {
-      logError(updateError, 'DATABASE', { taskIds: taskIds.length, workerId, filters })
-      const errorResponse = NextResponse.json({ error: updateError.message }, { status: 400 })
-      ApiLogger.logResponse(logContext, errorResponse, 'Bulk update failed')
-      return errorResponse
+    if (createError) {
+      logError(new Error(`Error creating tasks: ${createError.message}`), 'TASK_ASSIGNMENT', {
+        taskCount: tasks.length,
+        createError
+      })
+      return NextResponse.json({ error: 'Failed to create tasks' }, { status: 500 })
     }
     
-    // Log business event
-    logBusiness(
-      workerId ? `Bulk assigned ${taskIds.length} tasks` : `Bulk unassigned ${taskIds.length} tasks`,
-      'TASK_ASSIGNMENT',
-      {
-        managerId: manager.id,
-        workerId,
-        taskCount: taskIds.length,
-        filters,
-        assignmentMode
+    // Log individual task assignments for each worker
+    const workerTaskCounts = workers.reduce((acc, worker) => {
+      const workerTasks = tasks.filter(task => task.assigned_to_id === worker.id)
+      if (workerTasks.length > 0) {
+        acc[worker.id] = {
+          name: worker.name,
+          count: workerTasks.length
+        }
+        
+        logBusiness(`Tasks assigned to ${worker.name}`, 'TASK_ASSIGNMENT', {
+          workerId: worker.id,
+          workerName: worker.name,
+          taskCount: workerTasks.length,
+          taskType: workerTasks[0]?.task_type,
+          assignedBy: worker.id
+        })
       }
-    )
+      return acc
+    }, {} as Record<string, { name: string; count: number }>)
+    
+    logBusiness('Bulk task assignment completed', 'TASK_ASSIGNMENT', {
+      totalTasks: createdTasks?.length || 0,
+      workerCount: Object.keys(workerTaskCounts).length,
+      assignedBy: worker.id
+    })
+    
+    const response = NextResponse.json({
+      success: true,
+      tasks_created: createdTasks?.length || 0,
+      tasks: createdTasks,
+      assignments: workerTaskCounts
+    })
+    
+    ApiLogger.logResponse(logContext, response, worker.id, {
+      tasksCreated: createdTasks?.length || 0,
+      workerCount: Object.keys(workerTaskCounts).length
+    })
+    
+    return response
+  } catch (error) {
+    logError(error as Error, 'TASK_ASSIGNMENT', {
+      requestId: logContext.requestId
+    })
     
     const response = NextResponse.json({ 
-      tasksAssigned: taskIds.length,
-      tasks: updatedTasks 
-    })
-    ApiLogger.logResponse(logContext, response, `Successfully assigned ${taskIds.length} tasks`)
+      error: 'Internal server error',
+      requestId: logContext.requestId 
+    }, { status: 500 })
+    
+    ApiLogger.logResponse(logContext, response)
     return response
-    
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      logError(new Error('Invalid bulk assignment request'), 'API_ERROR', { validationErrors: error.errors })
-      const errorResponse = NextResponse.json({ error: 'Invalid request data', details: error.errors }, { status: 400 })
-      ApiLogger.logResponse(logContext, errorResponse, 'Validation failed')
-      return errorResponse
-    }
-    
-    logError(error as Error, 'API_ERROR', { context: 'bulk task assignment' })
-    const errorResponse = NextResponse.json({ error: 'Server error' }, { status: 500 })
-    ApiLogger.logResponse(logContext, errorResponse, 'Server error in bulk assignment')
-    return errorResponse
   }
 } 

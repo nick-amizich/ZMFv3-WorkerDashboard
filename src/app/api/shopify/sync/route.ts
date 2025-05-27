@@ -22,15 +22,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     
+    // Get pagination parameters
+    const url = new URL(request.url)
+    const page = parseInt(url.searchParams.get('page') || '1')
+    const limit = parseInt(url.searchParams.get('limit') || '50') // Increased default limit
+    const offset = (page - 1) * limit
+    
+    console.log(`Fetching Shopify orders: page=${page}, limit=${limit}, offset=${offset}`)
+    
     // Fetch orders for review (doesn't import anything)
-    const result = await fetchShopifyOrdersForReview()
+    const result = await fetchShopifyOrdersForReview({ limit, offset })
     
     if (result.success) {
       return NextResponse.json({ 
         success: true, 
-        message: `Found ${result.count} orders for review`,
+        message: `Found ${result.count} orders for review (page ${result.pagination.currentPage} of ${result.pagination.totalPages})`,
         orders: result.orders,
-        count: result.count
+        count: result.count,
+        pagination: result.pagination
       })
     } else {
       return NextResponse.json({ 

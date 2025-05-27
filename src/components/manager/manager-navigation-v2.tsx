@@ -81,6 +81,11 @@ const navigationItems: NavItem[] = [
     icon: Shield,
     children: [
       {
+        name: 'Quality Dashboard',
+        href: '/manager/quality',
+        description: 'Main quality dashboard with checkpoint templates'
+      },
+      {
         name: 'Quality Analytics',
         href: '/manager/analytics',
         description: 'Quality metrics and First Pass Yield'

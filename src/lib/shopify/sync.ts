@@ -226,13 +226,14 @@ async function determineProductCategory(productName: string, variantTitle: strin
   // Get configured headphone models
   const headphoneModels = await getHeadphoneModels()
   
-  // Check for configured headphone models
+  // Check for configured headphone models - MADE MORE PERMISSIVE FOR DEBUGGING
   const isHeadphoneModel = headphoneModels.some(model => {
     // Check if it's specifically a headphone, not just contains the model name
     return name.includes(model + ' headphone') || 
            name.includes(model + 'headphone') ||
            (name.includes(model) && name.includes('headphone')) ||
-           name === model // exact match for just the model name
+           name === model || // exact match for just the model name
+           name.includes(model) // TEMPORARILY: any mention of the model name
   })
   
   // Also check for generic "headphone" but not with accessory keywords
@@ -240,13 +241,19 @@ async function determineProductCategory(productName: string, variantTitle: strin
     !name.includes('pad') && !name.includes('cushion') && 
     !name.includes('cable') && !name.includes('strap')
   
-  if (isHeadphoneModel || isGenericHeadphone) {
-    return 'headphone'
+  // TEMPORARY: Also check for ZMF products above a certain price as headphones
+  const isPricedZMFProduct = name.toLowerCase().includes('zmf') && price > 100
+  
+  let category = 'other'
+  if (isHeadphoneModel || isGenericHeadphone || isPricedZMFProduct) {
+    category = 'headphone'
   } else if (name.includes('amp') || name.includes('dac')) {
-    return 'electronics'
+    category = 'electronics'
   }
   
-  return 'other'
+  console.log(`Product categorization: "${productName}" -> ${category} (price: $${price})`)
+  
+  return category
 }
 
 function getEstimatedHours(taskType: string, productCategory: string, hasCustomWork: boolean): number {
@@ -263,10 +270,13 @@ function getEstimatedHours(taskType: string, productCategory: string, hasCustomW
 
 /**
  * Fetch orders from Shopify for manager review
- * Does NOT automatically import into production system
- * Filters out orders/items that have already been imported
+ * Shows both imported and unimported items with status indicators
+ * Supports pagination for large order lists
  */
-export async function fetchShopifyOrdersForReview() {
+export async function fetchShopifyOrdersForReview(options: {
+  limit?: number
+  offset?: number
+} = {}) {
   const shopifyClient = await createShopifyClient()
   const supabase = await createClient()
   
@@ -274,13 +284,21 @@ export async function fetchShopifyOrdersForReview() {
     return { 
       success: false, 
       error: 'Shopify not configured. Please configure in Settings.',
-      orders: []
+      orders: [],
+      pagination: { total: 0, hasMore: false }
     }
   }
   
   try {
-    // Fetch recent unfulfilled orders from Shopify
-    const orders = await shopifyClient.getOrders(50) // Get last 50 unfulfilled orders
+    const limit = options.limit || 50 // Increased to get more orders
+    const offset = options.offset || 0
+    const page = Math.floor(offset / limit) + 1
+    
+    // Fetch orders from Shopify with pagination
+    // Note: We're fetching more than needed since Shopify pagination is cursor-based  
+    const orders = await shopifyClient.getOrders(Math.max(limit * 2, 100), page)
+    
+    console.log(`Fetched ${orders.length} orders from Shopify`)
     
     // Get all imported Shopify order IDs and line item IDs
     const { data: importedOrders } = await supabase
@@ -295,35 +313,49 @@ export async function fetchShopifyOrdersForReview() {
     const importedOrderIds = new Set(importedOrders?.map(o => o.shopify_order_id) || [])
     const importedLineItemIds = new Set(importedLineItems?.map(i => i.shopify_line_item_id) || [])
     
-    // Filter and enhance orders
+    // Filter and enhance orders - now showing both imported and unimported
     const enhancedOrders = []
+    const paginatedOrders = orders.slice(0, limit) // Apply pagination limit
+    const hasMore = orders.length > limit
     
-    for (const order of orders) {
-      // Filter out already imported line items
-      const unimportedLineItems = order.line_items.filter(
-        item => !importedLineItemIds.has(item.id)
-      )
+    for (const order of paginatedOrders) {
+      // Process ALL line items, not just unimported ones
+      const allLineItems = order.line_items
+      const unimportedLineItems = allLineItems.filter(item => !importedLineItemIds.has(item.id))
+      const importedLineItems = allLineItems.filter(item => importedLineItemIds.has(item.id))
       
-      // Only include orders that have unimported items
-      if (unimportedLineItems.length === 0) {
-        continue
+      // Calculate import status for the order
+      const totalItems = allLineItems.length
+      const importedCount = importedLineItems.length
+      const unimportedCount = unimportedLineItems.length
+      
+      let importStatus: 'not_imported' | 'partially_imported' | 'fully_imported' = 'not_imported'
+      if (importedCount === 0) {
+        importStatus = 'not_imported'
+      } else if (importedCount === totalItems) {
+        importStatus = 'fully_imported'
+      } else {
+        importStatus = 'partially_imported'
       }
       
-      // Categorize line items into main items and extras
+      // Categorize ALL line items (both imported and unimported) into main items and extras
       const categorizedItems = {
         mainItems: [] as any[],
         extraItems: [] as any[]
       }
       
       // Process each line item sequentially to handle async parseHeadphoneSpecs
-      for (const lineItem of unimportedLineItems) {
+      for (const lineItem of allLineItems) {
         const headphoneSpecs = await parseHeadphoneSpecs(lineItem)
         const price = parseFloat(lineItem.price || '0')
+        const isImported = importedLineItemIds.has(lineItem.id)
         
         const enhancedLineItem = {
           ...lineItem,
           headphone_specs: headphoneSpecs,
-          estimated_tasks: getRequiredTasks(headphoneSpecs.product_category, headphoneSpecs.requires_custom_work)
+          estimated_tasks: getRequiredTasks(headphoneSpecs.product_category, headphoneSpecs.requires_custom_work),
+          import_status: isImported ? 'imported' : 'not_imported',
+          can_be_selected: !isImported // Only unimported items can be selected for new batches
         }
         
         // Main items: Headphones with price > 0
@@ -335,28 +367,39 @@ export async function fetchShopifyOrdersForReview() {
         }
       }
       
-      // Only include orders that have main items or manager-reviewable extras
-      if (categorizedItems.mainItems.length === 0 && categorizedItems.extraItems.length === 0) {
-        continue
+      // Only skip orders that have NO main items at all (imported or unimported)
+      // TEMPORARILY DISABLED for debugging - let's see all orders
+      if (categorizedItems.mainItems.length === 0) {
+        console.log(`Order ${order.order_number} has no main items (headphones), but showing anyway for debugging`)
+        // continue // COMMENTED OUT FOR DEBUGGING
       }
       
-      // Create legacy line_items for backwards compatibility
+      // Create legacy line_items for backwards compatibility - include ALL items
       const legacyLineItems = []
-      for (const lineItem of unimportedLineItems) {
+      for (const lineItem of allLineItems) {
         const headphoneSpecs = await parseHeadphoneSpecs(lineItem)
+        const isImported = importedLineItemIds.has(lineItem.id)
+        
         legacyLineItems.push({
           ...lineItem,
           headphone_specs: headphoneSpecs,
-          estimated_tasks: getRequiredTasks(headphoneSpecs.product_category, headphoneSpecs.requires_custom_work)
+          estimated_tasks: getRequiredTasks(headphoneSpecs.product_category, headphoneSpecs.requires_custom_work),
+          import_status: isImported ? 'imported' : 'not_imported',
+          can_be_selected: !isImported
         })
       }
       
       enhancedOrders.push({
         ...order,
+        import_status: importStatus,
         _import_status: {
-          has_imported_items: order.line_items.length > unimportedLineItems.length,
-          imported_count: order.line_items.length - unimportedLineItems.length,
-          total_count: order.line_items.length
+          status: importStatus,
+          has_imported_items: importedCount > 0,
+          imported_count: importedCount,
+          unimported_count: unimportedCount,
+          total_count: totalItems,
+          all_imported: importStatus === 'fully_imported',
+          partially_imported: importStatus === 'partially_imported'
         },
         main_items: categorizedItems.mainItems,
         extra_items: categorizedItems.extraItems,
@@ -365,17 +408,28 @@ export async function fetchShopifyOrdersForReview() {
       })
     }
     
+    console.log(`Returning ${enhancedOrders.length} enhanced orders out of ${orders.length} total fetched`)
+    
     return { 
       success: true, 
       orders: enhancedOrders,
-      count: enhancedOrders.length
+      count: enhancedOrders.length,
+      pagination: {
+        total: orders.length,
+        limit,
+        offset,
+        hasMore,
+        currentPage: Math.floor(offset / limit) + 1,
+        totalPages: Math.ceil(orders.length / limit)
+      }
     }
   } catch (error) {
     console.error('Fetch error:', error)
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error',
-      orders: []
+      orders: [],
+      pagination: { total: 0, limit: 0, offset: 0, hasMore: false, currentPage: 1, totalPages: 0 }
     }
   }
 }
@@ -455,6 +509,7 @@ export async function importSelectedLineItems(selections: {
     
     let itemsCreated = 0
     let tasksCreated = 0
+    const createdOrderItems: any[] = []
     
     // Process only selected line items
     for (const lineItemId of selections.lineItemIds) {
@@ -504,6 +559,7 @@ export async function importSelectedLineItems(selections: {
       }
       
       itemsCreated++
+      createdOrderItems.push(orderItem)
       importDetails.push(`✅ Imported: ${orderItem.product_name} (${headphoneSpecs.product_category})`)
       
       // Create work tasks based on product type
@@ -549,6 +605,7 @@ export async function importSelectedLineItems(selections: {
       success: true, 
       itemsCreated,
       tasksCreated,
+      orderItems: createdOrderItems,
       details: importDetails
     }
   } catch (error) {

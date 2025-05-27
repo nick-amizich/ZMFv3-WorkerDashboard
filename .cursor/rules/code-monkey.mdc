@@ -13,6 +13,20 @@ If any requirement is unclear or seems to conflict with existing patterns, STOP 
 
 Do not run any dev servers, I will hand that when testing so no need. I am talking npm run dev commands
 
+
+🚫 Field Name Consistency (Critical for Auth)
+Always match selected fields with property access:
+```typescript
+// ❌ BAD: Causes auth failures
+.select('id, role, active')
+if (!worker?.is_active) // undefined - always fails!
+
+// ✅ GOOD: Field names match
+.select('id, role, is_active') 
+if (!worker?.is_active) // works correctly
+```
+Double-check field names in auth queries - mismatches cause silent 403 errors.
+
 📋 Core Stack
 Frontend: Next.js 15.3.2 (App Router), React 18.2.0, TypeScript 5
 UI: Tailwind CSS v4, shadcn/ui, Radix UI

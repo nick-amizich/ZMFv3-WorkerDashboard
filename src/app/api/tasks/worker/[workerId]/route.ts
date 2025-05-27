@@ -17,11 +17,11 @@ export async function GET(
     // Verify the user can access these tasks
     const { data: currentWorker } = await supabase
       .from('workers')
-      .select('id, role, active')
+      .select('id, role, is_active')
       .eq('auth_user_id', user.id)
       .single()
     
-    if (!currentWorker?.active) {
+    if (!currentWorker?.is_active) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     

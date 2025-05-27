@@ -8,27 +8,27 @@ import { cn } from '@/lib/utils'
 const navigationItems = [
   {
     name: 'Dashboard',
-    href: '/worker/dashboard',
+    href: '/worker/dashboard' as const,
     icon: Home,
   },
   {
     name: 'My Tasks',
-    href: '/worker',
+    href: '/worker' as const,
     icon: ClipboardList,
   },
   {
     name: 'Quality',
-    href: '/worker/quality',
+    href: '/worker/quality' as const,
     icon: Shield,
   },
   {
     name: 'Time Tracking',
-    href: '/worker/time',
+    href: '/worker/time' as const,
     icon: Clock,
   },
   {
     name: 'Achievements',
-    href: '/worker/achievements',
+    href: '/worker/achievements' as const,
     icon: Award,
   },
 ]
@@ -42,9 +42,7 @@ export function WorkerNavigation() {
         <div className="flex space-x-8">
           {navigationItems.map((item) => {
             const Icon = item.icon
-            const isActive = pathname === item.href || 
-              (item.href === '/worker' && pathname === '/worker') ||
-              (item.href === '/worker/dashboard' && pathname === '/worker/dashboard')
+            const isActive = pathname === item.href
             
             return (
               <Link

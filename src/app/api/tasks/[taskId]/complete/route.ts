@@ -17,7 +17,7 @@ export async function POST(
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, active')
+      .select('id, is_active')
       .eq('auth_user_id', user.id)
       .single()
     

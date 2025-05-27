@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { ApiLogger } from '@/lib/api-logger'
+import { logBusiness, logError } from '@/lib/logger'
 
 export async function GET(request: NextRequest) {
   try {
@@ -58,23 +60,30 @@ export async function GET(request: NextRequest) {
     // For each batch, fetch the order items that belong to it
     const batchesWithItems = await Promise.all(
       (batches || []).map(async (batch) => {
-        const { data: orderItems } = await supabase
-          .from('order_items')
-          .select(`
-            id,
-            title,
-            quantity,
-            sku,
-            orders!inner(
-              order_number,
-              customer_name
-            )
-          `)
-          .eq('batch_id', batch.id)
+        let orderItems: any[] = []
+        
+        // Only fetch order items if the batch has order_item_ids
+        if (batch.order_item_ids && batch.order_item_ids.length > 0) {
+          const { data } = await supabase
+            .from('order_items')
+            .select(`
+              id,
+              product_name,
+              quantity,
+              sku,
+              orders!inner(
+                order_number,
+                customer_name
+              )
+            `)
+            .in('id', batch.order_item_ids)
+          
+          orderItems = data || []
+        }
         
         return {
           ...batch,
-          order_items: orderItems || []
+          order_items: orderItems
         }
       })
     )
@@ -87,6 +96,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const logContext = ApiLogger.logRequest(request)
+  
   try {
     const supabase = await createClient()
     const { data: { user }, error } = await supabase.auth.getUser()
@@ -98,7 +109,7 @@ export async function POST(request: NextRequest) {
     // Validate employee status and role
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, active')
+      .select('id, role, is_active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -117,97 +128,144 @@ export async function POST(request: NextRequest) {
       batch_type,
       order_item_ids,
       workflow_template_id,
-      criteria = {}
+      criteria = {},
+      stock_config,
+      notes
     } = body
     
     // Validate required fields
-    if (!name || !batch_type || !order_item_ids || !Array.isArray(order_item_ids) || order_item_ids.length === 0) {
+    if (!name || !batch_type || !workflow_template_id) {
       return NextResponse.json({ 
-        error: 'Missing required fields: name, batch_type, and order_item_ids are required' 
+        error: 'Missing required fields: name, batch_type, and workflow_template_id are required' 
       }, { status: 400 })
     }
     
-    // Validate batch_type
-    if (!['model', 'wood_type', 'custom'].includes(batch_type)) {
-      return NextResponse.json({ 
-        error: 'Invalid batch_type. Must be one of: model, wood_type, custom' 
-      }, { status: 400 })
+    // Handle different batch types
+    let finalOrderItemIds = []
+    let finalBatchType = batch_type
+    let finalCriteria = criteria
+
+    if (batch_type === 'stock' && stock_config) {
+      // For stock batches, create placeholder order items
+      logBusiness('Creating stock batch', 'BATCH_CREATION', {
+        name,
+        stockConfig: stock_config,
+        createdBy: worker.id
+      })
+
+      // Use 'custom' as batch_type since 'stock' isn't allowed by the database constraint
+      finalBatchType = 'custom'
+      
+      // Store stock configuration in criteria
+      finalCriteria = {
+        ...criteria,
+        stock_batch: true,
+        stock_config: stock_config,
+        item_type: 'stock_models'
+      }
+      
+      // For stock batches, we don't need order_item_ids
+      // The criteria will contain all the stock configuration details
+      finalOrderItemIds = []
+      
+    } else {
+      // For regular customer order batches
+      if (!order_item_ids || !Array.isArray(order_item_ids) || order_item_ids.length === 0) {
+        return NextResponse.json({ 
+          error: 'Missing required field: order_item_ids is required for customer order batches' 
+        }, { status: 400 })
+      }
+      
+      // Validate batch_type for customer order batches
+      if (!['model', 'wood_type', 'custom'].includes(batch_type)) {
+        return NextResponse.json({ 
+          error: 'Invalid batch_type. Must be one of: model, wood_type, custom' 
+        }, { status: 400 })
+      }
+      
+      // Verify all order items exist
+      const { data: orderItems, error: orderItemsError } = await supabase
+        .from('order_items')
+        .select('id, product_name')
+        .in('id', order_item_ids)
+      
+      if (orderItemsError) {
+        logError(new Error(`Error verifying order items: ${orderItemsError.message}`), 'BATCH_CREATION', {
+          orderItemIds: order_item_ids,
+          error: orderItemsError
+        })
+        return NextResponse.json({ error: 'Failed to verify order items' }, { status: 500 })
+      }
+      
+      if (!orderItems || orderItems.length !== order_item_ids.length) {
+        return NextResponse.json({ 
+          error: 'Some order items do not exist' 
+        }, { status: 400 })
+      }
+      
+      finalOrderItemIds = order_item_ids
+      
+      logBusiness('Creating customer order batch', 'BATCH_CREATION', {
+        name,
+        batchType: batch_type,
+        orderItemCount: order_item_ids.length,
+        createdBy: worker.id
+      })
     }
     
-    // Verify all order items exist
-    const { data: orderItems, error: orderItemsError } = await supabase
-      .from('order_items')
-      .select('id, title')
-      .in('id', order_item_ids)
-    
-    if (orderItemsError) {
-      console.error('Error verifying order items:', orderItemsError)
-      return NextResponse.json({ error: 'Failed to verify order items' }, { status: 500 })
-    }
-    
-    if (!orderItems || orderItems.length !== order_item_ids.length) {
-      return NextResponse.json({ 
-        error: 'Some order items do not exist' 
-      }, { status: 400 })
-    }
-    
-    // Create the batch
+    // Create the batch with the correct field names based on the schema
     const { data: batch, error: createError } = await supabase
       .from('work_batches')
       .insert({
-        name,
-        created_by: worker.id,
-        workflow_id: workflow_template_id,
-        metadata: {
-          batch_type,
-          order_item_ids,
-          criteria
-        },
+        name: name,
+        batch_type: finalBatchType,
+        workflow_template_id,
+        order_item_ids: finalOrderItemIds,
+        criteria: finalCriteria,
         status: 'pending'
       })
-      .select(`
-        *,
-        workflow:workflows(
-          id,
-          name,
-          description
-        )
-      `)
+      .select()
       .single()
     
     if (createError) {
-      console.error('Error creating batch:', createError)
+      logError(new Error(`Error creating batch: ${createError.message}`), 'BATCH_CREATION', {
+        name,
+        batchType: finalBatchType,
+        createError
+      })
       return NextResponse.json({ error: 'Failed to create batch' }, { status: 500 })
     }
     
-    // Update order items to associate them with this batch
-    if (batch && order_item_ids.length > 0) {
-      await supabase
-        .from('order_items')
-        .update({ batch_id: batch.id })
-        .in('id', order_item_ids)
-      
-      // Fetch the updated order items
-      const { data: orderItemsData } = await supabase
-        .from('order_items')
-        .select(`
-          id,
-          title,
-          quantity,
-          sku,
-          orders!inner(
-            order_number,
-            customer_name
-          )
-        `)
-        .eq('batch_id', batch.id)
-      
-      batch.order_items = orderItemsData || []
-    }
+    logBusiness('Batch created successfully', 'BATCH_CREATION', {
+      batchId: batch.id,
+      name: batch.name,
+      batchType: batch.batch_type,
+      isStockBatch: !!stock_config,
+      createdBy: worker.id
+    })
     
-    return NextResponse.json(batch)
+    const response = NextResponse.json({
+      ...batch,
+      order_items: [] // Will be populated when we fetch batches later
+    })
+    
+    ApiLogger.logResponse(logContext, response, worker.id, {
+      batchId: batch.id,
+      batchName: batch.name
+    })
+    
+    return response
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    logError(error as Error, 'BATCH_CREATION', {
+      requestId: logContext.requestId
+    })
+    
+    const response = NextResponse.json({ 
+      error: 'Internal server error',
+      requestId: logContext.requestId 
+    }, { status: 500 })
+    
+    ApiLogger.logResponse(logContext, response)
+    return response
   }
 } 

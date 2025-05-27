@@ -39,6 +39,15 @@ export async function POST(
       return NextResponse.json({ error: 'Target stage is required' }, { status: 400 })
     }
 
+    // Handle special cases for production flow stages
+    let finalTargetStage = targetStage
+    if (targetStage === 'pending') {
+      finalTargetStage = null  // Pending means no current stage
+    } else if (targetStage === 'completed') {
+      finalTargetStage = 'completed'
+      // Also update batch status to completed
+    }
+
     logBusiness('Batch transition initiated', 'BATCH_TRANSITION', {
       batchId,
       targetStage,
@@ -75,27 +84,42 @@ export async function POST(
     // Validate new stage exists in workflow - cast stages to proper type
     const stages = workflow.stages as Array<{ stage: string; tasks?: Array<any> }>
     const validStages = stages.map((s: any) => s.stage)
-    if (!validStages.includes(targetStage)) {
+    
+    // Allow special stages like 'pending' and 'completed' even if not in workflow
+    const specialStages = ['pending', 'completed']
+    const isValidStage = validStages.includes(targetStage) || specialStages.includes(targetStage)
+    
+    if (!isValidStage) {
       logErrorUtil(new Error(`Invalid stage: ${targetStage}`), 'BATCH_TRANSITION', {
         batchId,
         targetStage,
-        validStages
+        validStages: [...validStages, ...specialStages]
       })
       return NextResponse.json({ 
         error: 'Invalid stage for this workflow',
-        validStages 
+        validStages: [...validStages, ...specialStages]
       }, { status: 400 })
     }
 
     const currentStage = batch.current_stage
 
-    // Update batch stage - using correct table name 'work_batches'
+    // Update batch stage and status if needed - using correct table name 'work_batches'
+    const updateData: any = { 
+      current_stage: finalTargetStage,
+      updated_at: new Date().toISOString()
+    }
+    
+    // Update status to completed if moving to completed stage
+    if (targetStage === 'completed') {
+      updateData.status = 'completed'
+    } else if (batch.status === 'pending' && finalTargetStage) {
+      // Activate batch if it's moving from pending to an actual stage
+      updateData.status = 'active'
+    }
+
     const { error: updateError } = await supabase
       .from('work_batches')
-      .update({ 
-        current_stage: targetStage,
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', batchId)
     
     if (updateError) {
@@ -127,12 +151,13 @@ export async function POST(
     }
 
     // Get workflow stage configuration to determine if we need to create tasks
-    const stageConfig = stages.find((s: any) => s.stage === targetStage)
+    // Only create tasks for actual workflow stages, not special stages like 'pending' or 'completed'
+    const stageConfig = finalTargetStage ? stages.find((s: any) => s.stage === finalTargetStage) : null
     
     if (stageConfig?.tasks && stageConfig.tasks.length > 0) {
       logBusiness('Creating tasks for new stage', 'TASK_CREATION', {
         batchId,
-        stage: targetStage,
+        stage: finalTargetStage,
         taskCount: stageConfig.tasks.length
       })
 
@@ -141,7 +166,7 @@ export async function POST(
         id: `${batchId}-${task.type}-${Date.now()}`,
         batch_id: batchId,
         task_type: task.type,
-        stage: targetStage,
+        stage: finalTargetStage,
         task_description: task.title || `${task.type} for batch`,
         priority: task.priority || 'normal',
         estimated_hours: (task.estimated_time_minutes || 60) / 60,
@@ -169,11 +194,12 @@ export async function POST(
       .insert([{
         workflow_template_id: batch.workflow_template_id,
         batch_id: batchId,
-        stage: targetStage,
+        stage: finalTargetStage,
         action: 'stage_transition',
         action_details: {
           from_stage: currentStage,
           to_stage: targetStage,
+          final_stage: finalTargetStage,
           transition_type: transition_type || 'manual'
         },
         executed_by_id: worker.id,
@@ -188,18 +214,19 @@ export async function POST(
     }
 
     // Log successful business operation
-    BusinessLogger.logBatchTransition(batchId, currentStage || 'unknown', targetStage, worker.id)
+    BusinessLogger.logBatchTransition(batchId, currentStage || 'unknown', finalTargetStage || 'pending', worker.id)
 
     const response = NextResponse.json({ 
       success: true, 
       batchId,
       previousStage: currentStage,
-      newStage: targetStage
+      newStage: finalTargetStage,
+      requestedStage: targetStage
     })
 
     ApiLogger.logResponse(logContext, response, worker.id, {
       batchId,
-      stageTransition: `${currentStage} -> ${targetStage}`
+      stageTransition: `${currentStage} -> ${finalTargetStage} (requested: ${targetStage})`
     })
 
     return response

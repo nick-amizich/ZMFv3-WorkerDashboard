@@ -1,18 +1,21 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
-import { RefreshCw, AlertCircle, Search, Filter, Calendar, Package, User, DollarSign, Download, Clock, ChevronDown } from 'lucide-react'
+import { RefreshCw, AlertCircle, Search, Filter, Calendar, Package, User, DollarSign, Download, Clock, ChevronDown, Loader2, Zap } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { ProductionAssignment } from './production-assignment'
 
 // Types for Shopify import
 interface ShopifyLineItem {
@@ -66,6 +69,18 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [lastSyncResult, setLastSyncResult] = useState<any>(null)
+  
+  // Enhanced filtering similar to task assignment
+  const [filters, setFilters] = useState({
+    productModel: 'all',
+    woodType: 'all',
+    padType: 'all',
+    customWork: 'all'
+  })
+  
+  // Track selected items for batching
+  const [selectedForBatch, setSelectedForBatch] = useState<{[orderId: number]: number[]}>({})
+  const [creatingBatch, setCreatingBatch] = useState(false)
   const { toast } = useToast()
   
   const fetchShopifyOrders = useCallback(async (showToast = true) => {
@@ -253,6 +268,168 @@ export default function OrdersPage() {
     return <Badge variant="secondary">Accessory</Badge>
   }
 
+  // Extract filter options from available orders
+  const filterOptions = useMemo(() => {
+    const allItems = shopifyOrders.flatMap(order => [...(order.main_items || []), ...(order.extra_items || [])])
+    
+    const productModels = [...new Set(allItems.map(item => {
+      // Extract model name from product name (e.g., "ZMF Auteur" -> "Auteur")
+      const match = item.title.match(/ZMF\s+(\w+)/i)
+      return match ? match[1] : item.title.split(' ')[0]
+    }))].sort()
+    
+    const woodTypes = [...new Set(allItems
+      .map(item => item.headphone_specs?.wood_type)
+      .filter((wood): wood is string => Boolean(wood))
+    )].sort()
+    
+    const padTypes = [...new Set(allItems
+      .map(item => item.headphone_specs?.pad_type)
+      .filter((pad): pad is string => Boolean(pad))
+    )].sort()
+    
+    return { productModels, woodTypes, padTypes }
+  }, [shopifyOrders])
+
+  // Apply filters to orders
+  const filteredShopifyOrders = useMemo(() => {
+    return shopifyOrders.filter(order => {
+      // First apply search and category filters
+      const searchMatch = !searchTerm || 
+        order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customer?.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customer?.last_name?.toLowerCase().includes(searchTerm.toLowerCase())
+
+      if (!searchMatch) return false
+
+      // Apply enhanced filters to order items
+      const allItems = [...(order.main_items || []), ...(order.extra_items || [])]
+      const hasMatchingItems = allItems.some(item => {
+        const specs = item.headphone_specs
+        
+        // Product model filter
+        if (filters.productModel !== 'all') {
+          const itemModel = item.title.match(/ZMF\s+(\w+)/i)?.[1] || item.title.split(' ')[0]
+          if (itemModel.toLowerCase() !== filters.productModel.toLowerCase()) return false
+        }
+        
+        // Wood type filter
+        if (filters.woodType !== 'all' && specs?.wood_type !== filters.woodType) return false
+        
+        // Pad type filter  
+        if (filters.padType !== 'all' && specs?.pad_type !== filters.padType) return false
+        
+        // Custom work filter
+        if (filters.customWork === 'custom_only' && !specs?.requires_custom_work) return false
+        if (filters.customWork === 'standard_only' && specs?.requires_custom_work) return false
+        
+        return true
+      })
+
+      return hasMatchingItems
+    })
+  }, [shopifyOrders, searchTerm, filters])
+
+  // Create batch from selected items
+  const createBatchFromSelected = async () => {
+    const selectedItems = Object.entries(selectedForBatch).filter(([_, items]) => items.length > 0)
+    
+    if (selectedItems.length === 0) {
+      toast({
+        title: 'No items selected',
+        description: 'Please select at least one item to create a batch',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setCreatingBatch(true)
+    
+    try {
+      // First import the selected items
+      let allOrderItems = []
+      
+      for (const [orderId, lineItemIds] of selectedItems) {
+        const response = await fetch('/api/shopify/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: Number(orderId),
+            lineItemIds: lineItemIds.map(id => Number(id))
+          })
+        })
+        
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Import failed')
+        }
+        
+        const result = await response.json()
+        allOrderItems.push(...(result.orderItems || []))
+      }
+      
+      // Create batch with imported items
+      const batchResponse = await fetch('/api/batches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Customer Orders - ${new Date().toLocaleDateString()}`,
+          type: 'customer',
+          description: `Batch created from ${selectedItems.length} order(s)`,
+          order_item_ids: allOrderItems.map(item => item.id)
+        })
+      })
+      
+      if (!batchResponse.ok) {
+        const error = await batchResponse.json()
+        throw new Error(error.error || 'Failed to create batch')
+      }
+      
+      const batch = await batchResponse.json()
+      
+      toast({
+        title: 'Batch created successfully',
+        description: `Created batch "${batch.name}" with ${allOrderItems.length} items`
+      })
+      
+      // Clear selections
+      setSelectedForBatch({})
+      
+      // Refresh orders
+      await fetchShopifyOrders(false)
+      
+    } catch (error) {
+      toast({
+        title: 'Failed to create batch',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive'
+      })
+    } finally {
+      setCreatingBatch(false)
+    }
+  }
+
+  // Handle item selection for batching
+  const handleBatchSelection = (orderId: number, lineItemId: number, checked: boolean) => {
+    setSelectedForBatch(prev => {
+      const current = prev[orderId] || []
+      if (checked) {
+        return { ...prev, [orderId]: [...current, lineItemId] }
+      } else {
+        const updated = current.filter(id => id !== lineItemId)
+        if (updated.length === 0) {
+          const { [orderId]: removed, ...rest } = prev
+          return rest
+        }
+        return { ...prev, [orderId]: updated }
+      }
+    })
+  }
+
+  const getSelectedBatchCount = () => {
+    return Object.values(selectedForBatch).reduce((sum, items) => sum + items.length, 0)
+  }
+
   const renderLineItem = (item: ShopifyLineItem, orderId: number, isMainItem: boolean = false) => {
     const isItemSelected = selectedItems[orderId]?.includes(item.id) || false
     const price = parseFloat(item.price || '0')
@@ -382,29 +559,7 @@ export default function OrdersPage() {
     )
   }
 
-  // Filter Shopify orders
-  const filteredShopifyOrders = shopifyOrders.filter((order: ShopifyOrder) => {
-    // Get all items from both new and legacy structures
-    const allItems = [
-      ...(order.main_items || []),
-      ...(order.extra_items || []),
-      ...(order.line_items || [])
-    ]
-    
-    const matchesSearch = searchTerm === '' || 
-      order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      allItems.some((item: ShopifyLineItem) => 
-        item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.sku.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    
-    const matchesCategory = categoryFilter === 'all' || 
-      allItems.some((item: ShopifyLineItem) => item.headphone_specs.product_category === categoryFilter)
-    
-    return matchesSearch && matchesCategory
-  })
+
 
   if (loading) {
     return (
@@ -422,39 +577,77 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold">Import Orders</h2>
+          <h2 className="text-2xl font-bold">Orders & Production</h2>
           <p className="text-muted-foreground">
-            Import headphone builds from Shopify into production
+            Import orders from Shopify and assign them to production
           </p>
         </div>
         <div className="flex gap-2">
-        <Button 
-          variant="outline"
-            onClick={() => fetchShopifyOrders(true)}
-            disabled={loading}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
+          <Button variant="outline" asChild>
+            <Link href="/manager/production-flow">
+              <Zap className="mr-2 h-4 w-4" />
+              Production Flow
+            </Link>
           </Button>
-          <Button 
-            onClick={importSelected}
-            disabled={importing || getSelectedCount() === 0}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            {importing ? (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Importing...
-            </>
-          ) : (
-            <>
-                <Download className="mr-2 h-4 w-4" />
-                Import ({getSelectedCount()})
-            </>
-          )}
-        </Button>
         </div>
       </div>
+
+      {/* Main Content Tabs */}
+      <Tabs defaultValue="production" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="production" className="flex items-center space-x-2">
+            <Zap className="h-4 w-4" />
+            <span>Production Assignment</span>
+          </TabsTrigger>
+          <TabsTrigger value="import" className="flex items-center space-x-2">
+            <Download className="h-4 w-4" />
+            <span>Import from Shopify</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Production Assignment Tab */}
+        <TabsContent value="production">
+          <ProductionAssignment />
+        </TabsContent>
+
+        {/* Import Orders Tab */}
+        <TabsContent value="import" className="space-y-6">
+          {/* Import Header */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-xl font-semibold">Import Orders</h3>
+              <p className="text-muted-foreground">
+                Import headphone builds from Shopify into production
+              </p>
+            </div>
+            <div className="flex gap-2">
+            <Button 
+              variant="outline"
+                onClick={() => fetchShopifyOrders(true)}
+                disabled={loading}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh
+              </Button>
+              <Button 
+                onClick={importSelected}
+                disabled={importing || getSelectedCount() === 0}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {importing ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Importing...
+                </>
+              ) : (
+                <>
+                    <Download className="mr-2 h-4 w-4" />
+                    Import ({getSelectedCount()})
+                </>
+              )}
+            </Button>
+            </div>
+          </div>
 
       {/* Sync Results */}
       {lastSyncResult && lastSyncResult.count >= 0 && (
@@ -502,15 +695,19 @@ export default function OrdersPage() {
         </Alert>
       )}
 
-      {/* Filters */}
+      {/* Enhanced Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-4 w-4" />
             Filters & Search
           </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Filter orders to find specific models, wood types, or custom work
+          </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Search and Basic Category */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -534,6 +731,129 @@ export default function OrdersPage() {
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Enhanced Product Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="product-model">Product Model</Label>
+              <Select 
+                value={filters.productModel} 
+                onValueChange={(value) => setFilters(prev => ({ ...prev, productModel: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All models" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All models</SelectItem>
+                  {filterOptions.productModels.map(model => (
+                    <SelectItem key={model} value={model}>
+                      {model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="wood-type">Wood Type</Label>
+              <Select 
+                value={filters.woodType} 
+                onValueChange={(value) => setFilters(prev => ({ ...prev, woodType: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All woods" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All woods</SelectItem>
+                  {filterOptions.woodTypes.map(wood => (
+                    <SelectItem key={wood} value={wood}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-amber-100 border border-amber-300"></div>
+                        {wood}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="pad-type">Pad Type</Label>
+              <Select 
+                value={filters.padType} 
+                onValueChange={(value) => setFilters(prev => ({ ...prev, padType: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All pads" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All pads</SelectItem>
+                  {filterOptions.padTypes.map(pad => (
+                    <SelectItem key={pad} value={pad}>
+                      {pad}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="custom-work">Custom Work</Label>
+              <Select 
+                value={filters.customWork} 
+                onValueChange={(value) => setFilters(prev => ({ ...prev, customWork: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All orders" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All orders</SelectItem>
+                  <SelectItem value="custom_only">Custom work only</SelectItem>
+                  <SelectItem value="standard_only">Standard only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Filter Summary & Actions */}
+          <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="px-3 py-1">
+                {filteredShopifyOrders.length} order{filteredShopifyOrders.length !== 1 ? 's' : ''} shown
+              </Badge>
+              {(filters.productModel !== 'all' || filters.woodType !== 'all' || filters.padType !== 'all' || filters.customWork !== 'all') && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setFilters({ productModel: 'all', woodType: 'all', padType: 'all', customWork: 'all' })}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Clear filters
+                </Button>
+              )}
+            </div>
+            
+            {/* Batch Creation Button */}
+            {getSelectedBatchCount() > 0 && (
+              <Button 
+                onClick={createBatchFromSelected}
+                disabled={creatingBatch}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {creatingBatch ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Batch...
+                  </>
+                ) : (
+                  <>
+                    <Package className="mr-2 h-4 w-4" />
+                    Create Batch ({getSelectedBatchCount()})
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -720,6 +1040,8 @@ export default function OrdersPage() {
           </CardContent>
         </Card>
       )}
+          </TabsContent>
+        </Tabs>
     </div>
   )
 }
