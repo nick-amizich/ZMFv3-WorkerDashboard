@@ -98,7 +98,12 @@ const navigationItems: NavItem[] = [
       {
         name: 'Quality Holds',
         href: '/manager/quality-holds',
-        description: 'Manage quarantined batches'
+        description: 'Manage quality hold batches'
+      },
+      {
+        name: 'QC Submissions',
+        href: '/manager/qc-submissions',
+        description: 'Review quality control checklists'
       },
       {
         name: 'Reports & Certificates',

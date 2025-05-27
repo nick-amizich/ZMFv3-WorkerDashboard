@@ -17,8 +17,11 @@ import {
   TrendingUp,
   MapPin,
   ArrowRight,
-  Target
+  Target,
+  CheckSquare
 } from 'lucide-react'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
 
 const queryClient = new QueryClient()
 
@@ -294,6 +297,47 @@ export default function WorkerDashboard() {
             </CardContent>
           </Card>
         )}
+
+        {/* QC Checklist Quick Access Card */}
+        <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-900">
+              <CheckSquare className="h-5 w-5" />
+              Quality Control Checklist
+            </CardTitle>
+            <p className="text-green-700">
+              Complete quality checks for each production step
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <p className="text-sm text-green-800">
+                Use the QC checklist to ensure every headphone meets our quality standards. 
+                Track your progress through each production step with our mobile-friendly interface.
+              </p>
+              <div className="flex items-center gap-4 text-sm text-green-700">
+                <div className="flex items-center gap-1">
+                  <CheckCircle className="h-4 w-4" />
+                  <span>8 Production Steps</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <ClipboardList className="h-4 w-4" />
+                  <span>Detailed Checklists</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock className="h-4 w-4" />
+                  <span>Auto-save Progress</span>
+                </div>
+              </div>
+              <Link href="/worker/qc-checklist">
+                <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
+                  Open QC Checklist
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Enhanced Task List with Workflow Context */}
         <div>

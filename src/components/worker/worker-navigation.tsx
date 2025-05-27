@@ -2,33 +2,38 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Home, ClipboardList, Shield, Award, Clock } from 'lucide-react'
+import { Home, ClipboardList, Shield, Award, Clock, CheckSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigationItems = [
   {
     name: 'Dashboard',
-    href: '/worker/dashboard' as const,
+    href: '/worker/dashboard',
     icon: Home,
   },
   {
     name: 'My Tasks',
-    href: '/worker' as const,
+    href: '/worker',
     icon: ClipboardList,
   },
   {
     name: 'Quality',
-    href: '/worker/quality' as const,
+    href: '/worker/quality',
     icon: Shield,
   },
   {
+    name: 'QC Checklist',
+    href: '/worker/qc-checklist',
+    icon: CheckSquare,
+  },
+  {
     name: 'Time Tracking',
-    href: '/worker/time' as const,
+    href: '/worker/time',
     icon: Clock,
   },
   {
     name: 'Achievements',
-    href: '/worker/achievements' as const,
+    href: '/worker/achievements',
     icon: Award,
   },
 ]
