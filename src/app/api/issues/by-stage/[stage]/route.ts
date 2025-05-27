@@ -16,7 +16,7 @@ export async function GET(
     // Validate worker status
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, role, active')
+      .select('id, role, is_active')
       .eq('auth_user_id', user.id)
       .single()
     

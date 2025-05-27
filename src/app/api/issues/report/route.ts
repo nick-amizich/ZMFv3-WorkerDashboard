@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, active, name')
+      .select('id, is_active, name')
       .eq('auth_user_id', user.id)
       .single()
     

@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     // Get worker details
     const { data: worker } = await supabase
       .from('workers')
-      .select('id, active')
+      .select('id, is_active')
       .eq('auth_user_id', user.id)
       .single()
     
@@ -30,9 +30,9 @@ export async function POST(request: NextRequest) {
     // If no work_log_id provided, find the worker's active timer
     if (!workLogId) {
       const { data: activeTimer } = await supabase
-        .from('work_logs')
+        .from('time_logs')
         .select('id')
-        .eq('employee_id', worker.id)
+        .eq('worker_id', worker.id)
         .is('end_time', null)
         .single()
       
@@ -45,20 +45,20 @@ export async function POST(request: NextRequest) {
       workLogId = activeTimer.id
     }
     
-    // Verify the work log exists and belongs to this worker
-    const { data: workLog } = await supabase
-      .from('work_logs')
-      .select('employee_id, end_time')
+    // Verify the time log exists and belongs to this worker
+    const { data: timeLog } = await supabase
+      .from('time_logs')
+      .select('worker_id, end_time')
       .eq('id', workLogId)
       .single()
     
-    if (!workLog || workLog.employee_id !== worker.id) {
+    if (!timeLog || timeLog.worker_id !== worker.id) {
       return NextResponse.json({ 
         error: 'Work log not found or not owned by you' 
       }, { status: 404 })
     }
     
-    if (workLog.end_time) {
+    if (timeLog.end_time) {
       return NextResponse.json({ 
         error: 'Timer already stopped' 
       }, { status: 400 })
@@ -66,8 +66,8 @@ export async function POST(request: NextRequest) {
     
     // Stop the timer
     const endTime = new Date().toISOString()
-    const { data: updatedWorkLog, error: updateError } = await supabase
-      .from('work_logs')
+    const { data: updatedTimeLog, error: updateError } = await supabase
+      .from('time_logs')
       .update({
         end_time: endTime
       })
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to stop timer' }, { status: 500 })
     }
     
-    return NextResponse.json(updatedWorkLog)
+    return NextResponse.json(updatedTimeLog)
   } catch (error) {
     console.error('API Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

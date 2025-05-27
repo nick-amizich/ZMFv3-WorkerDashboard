@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -222,28 +223,33 @@ export function QCChecklistClient({ currentWorker, allWorkers }: QCChecklistClie
     <div className="container max-w-4xl mx-auto p-4 pb-20">
       <div className="space-y-6">
         {/* Header */}
-        <div className="sticky top-0 bg-background z-10 pb-4 border-b">
-          <h1 className="text-2xl font-bold mb-2">Quality Control Checklist</h1>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <User className="h-4 w-4" />
-            <span>{selectedWorkerName}</span>
+        <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+          <h1 className="text-3xl font-bold mb-4">Quality Control Checklist</h1>
+          
+          <div className="flex items-center gap-3 text-sm mb-4">
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-md border border-blue-200">
+              <User className="h-4 w-4 text-blue-600" />
+              <span className="font-medium text-blue-800">{selectedWorkerName}</span>
+            </div>
             {selectedStep && (
-              <>
-                <span>•</span>
-                <ClipboardList className="h-4 w-4" />
-                <span>{productionSteps.find(s => s.value === selectedStep)?.label}</span>
-              </>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-md border border-green-200">
+                <ClipboardList className="h-4 w-4 text-green-600" />
+                <span className="font-medium text-green-800">
+                  {productionSteps.find(s => s.value === selectedStep)?.label}
+                </span>
+              </div>
             )}
           </div>
+          
           {totalCount > 0 && (
-            <div className="mt-2">
+            <div className="space-y-2">
               <div className="flex justify-between text-sm mb-1">
-                <span>Progress</span>
-                <span>{completedCount} of {totalCount} completed</span>
+                <span className="font-medium">Progress</span>
+                <span className="font-medium">{completedCount} of {totalCount} completed</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-500 ease-out"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -306,34 +312,31 @@ export function QCChecklistClient({ currentWorker, allWorkers }: QCChecklistClie
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="model">Model</Label>
-                  <input
+                  <Input
                     id="model"
                     type="text"
-                    className="w-full px-3 py-2 border rounded-md"
                     value={productInfo.model}
                     onChange={(e) => setProductInfo(prev => ({ ...prev, model: e.target.value }))}
                     placeholder="e.g., HD650"
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="serialNumber">Serial Number</Label>
-                  <input
+                  <Input
                     id="serialNumber"
                     type="text"
-                    className="w-full px-3 py-2 border rounded-md"
                     value={productInfo.serialNumber}
                     onChange={(e) => setProductInfo(prev => ({ ...prev, serialNumber: e.target.value }))}
                     placeholder="e.g., SN12345"
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="woodType">Wood Type</Label>
-                  <input
+                  <Input
                     id="woodType"
                     type="text"
-                    className="w-full px-3 py-2 border rounded-md"
                     value={productInfo.woodType}
                     onChange={(e) => setProductInfo(prev => ({ ...prev, woodType: e.target.value }))}
                     placeholder="e.g., Walnut"
@@ -347,9 +350,29 @@ export function QCChecklistClient({ currentWorker, allWorkers }: QCChecklistClie
         {/* Checklist Items */}
         {selectedStep && checklistItems.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle>Quality Checklist</CardTitle>
-              <CardDescription>Complete all items before marking step complete</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+              <div>
+                <CardTitle>Quality Checklist</CardTitle>
+                <CardDescription>Complete all items before marking step complete</CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setChecklistItems(prev => prev.map(item => ({ ...item, completed: true })))}
+                  disabled={completedCount === totalCount}
+                >
+                  Select All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setChecklistItems(prev => prev.map(item => ({ ...item, completed: false })))}
+                  disabled={completedCount === 0}
+                >
+                  Clear All
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
