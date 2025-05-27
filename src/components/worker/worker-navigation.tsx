@@ -15,7 +15,7 @@ const navigationItems = [
   },
   {
     name: 'My Tasks',
-    href: '/worker',
+    href: '/worker/tasks',
     icon: ClipboardList,
   },
   {

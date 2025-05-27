@@ -24,7 +24,6 @@ interface ProductionStep {
 
 interface QCChecklistClientProps {
   currentWorker: Worker & { role: string, is_active: boolean }
-  allWorkers: Worker[]
   productionSteps: ProductionStep[]
 }
 
@@ -41,9 +40,7 @@ interface DatabaseChecklistItem {
   sort_order: number
 }
 
-export function QCChecklistClient({ currentWorker, allWorkers, productionSteps }: QCChecklistClientProps) {
-  const [selectedWorkerId, setSelectedWorkerId] = useState(currentWorker.id)
-  const [selectedWorkerName, setSelectedWorkerName] = useState(currentWorker.name)
+export function QCChecklistClient({ currentWorker, productionSteps }: QCChecklistClientProps) {
   const [selectedStep, setSelectedStep] = useState('')
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([])
   const [overallNotes, setOverallNotes] = useState('')
@@ -124,14 +121,6 @@ export function QCChecklistClient({ currentWorker, allWorkers, productionSteps }
     }
   }
 
-  const handleWorkerChange = (workerId: string) => {
-    const worker = allWorkers.find(w => w.id === workerId)
-    if (worker) {
-      setSelectedWorkerId(worker.id)
-      setSelectedWorkerName(worker.name)
-    }
-  }
-
   const handleChecklistItemToggle = (itemId: string) => {
     setChecklistItems(prev => prev.map(item =>
       item.id === itemId ? { ...item, completed: !item.completed } : item
@@ -167,8 +156,8 @@ export function QCChecklistClient({ currentWorker, allWorkers, productionSteps }
     setIsSubmitting(true)
     try {
       const submission = {
-        worker_id: selectedWorkerId,
-        worker_name: selectedWorkerName,
+        worker_id: currentWorker.id,
+        worker_name: currentWorker.name,
         production_step: selectedStep,
         checklist_items: checklistItems.map(item => ({
           itemId: item.id,
@@ -252,7 +241,7 @@ export function QCChecklistClient({ currentWorker, allWorkers, productionSteps }
           <div className="flex items-center gap-3 text-sm mb-4">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-md border border-blue-200">
               <User className="h-4 w-4 text-blue-600" />
-              <span className="font-medium text-blue-800">{selectedWorkerName}</span>
+              <span className="font-medium text-blue-800">{currentWorker.name}</span>
             </div>
             {selectedStep && (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-md border border-green-200">
@@ -279,30 +268,6 @@ export function QCChecklistClient({ currentWorker, allWorkers, productionSteps }
             </div>
           )}
         </div>
-
-        {/* Worker Selection (for managers) */}
-        {currentWorker.role === 'manager' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Worker Selection</CardTitle>
-              <CardDescription>Select the worker performing this QC check</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Select value={selectedWorkerId} onValueChange={handleWorkerChange}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a worker" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allWorkers.map(worker => (
-                    <SelectItem key={worker.id} value={worker.id}>
-                      {worker.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Step Selection */}
         <Card>

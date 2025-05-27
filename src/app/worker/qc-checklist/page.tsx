@@ -25,13 +25,6 @@ export default async function QCChecklistPage() {
     redirect('/unauthorized')
   }
 
-  // Get all workers for the dropdown
-  const { data: allWorkers } = await supabase
-    .from('workers')
-    .select('id, name')
-    .eq('is_active', true)
-    .order('name')
-
   // Get production steps from the dedicated table
   const { data: steps, error } = await supabase
     .from('qc_production_steps' as any)
@@ -70,7 +63,6 @@ export default async function QCChecklistPage() {
           role: worker.role || 'worker',
           is_active: worker.is_active || false
         }}
-        allWorkers={allWorkers || []}
         productionSteps={productionSteps}
       />
     </Suspense>
