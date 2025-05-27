@@ -234,7 +234,7 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
   const [editingValues, setEditingValues] = useState({ value: '', label: '' })
   const [isSaving, setIsSaving] = useState(false)
   const [isLoadingSteps, setIsLoadingSteps] = useState(false)
-  const [isPopulatingChecklists, setIsPopulatingChecklists] = useState(false)
+  const [isAddingStep, setIsAddingStep] = useState(false)
   
   // Checklist editing state
   const [checklistDialogOpen, setChecklistDialogOpen] = useState(false)
@@ -337,6 +337,32 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
   }
 
   const handleEditChecklist = async (step: ProductionStep) => {
+    // Safety check: Verify this step exists in the database before allowing checklist editing
+    try {
+      const response = await fetch('/api/settings/qc-steps')
+      if (response.ok) {
+        const data = await response.json()
+        const stepExistsInDb = data.steps?.some((dbStep: ProductionStep) => dbStep.value === step.value)
+        
+        if (!stepExistsInDb) {
+          toast({
+            title: 'Step Not Saved',
+            description: 'This production step must be saved to the database before you can edit its checklist items. Please save your changes first.',
+            variant: 'destructive'
+          })
+          return
+        }
+      }
+    } catch (error) {
+      console.error('Error checking step existence:', error)
+      toast({
+        title: 'Error',
+        description: 'Could not verify if this step exists in the database. Please save your changes first.',
+        variant: 'destructive'
+      })
+      return
+    }
+
     setCurrentStep(step)
     setChecklistDialogOpen(true)
     await loadChecklistItems(step)
@@ -394,7 +420,7 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
     }
   }
 
-  const handleAddStep = () => {
+  const handleAddStep = async () => {
     if (!newStep.value || !newStep.label) {
       toast({
         title: 'Invalid Input',
@@ -414,20 +440,83 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
       return
     }
 
-    setSteps(prev => [...prev, { ...newStep }])
+    setIsAddingStep(true)
+
+    // Add to local state first
+    const newStepToAdd = { ...newStep }
+    setSteps(prev => [...prev, newStepToAdd])
     setNewStep({ value: '', label: '' })
-    toast({
-      title: 'Step Added',
-      description: 'New production step added successfully.',
-    })
+
+    // Immediately save to database
+    try {
+      const updatedSteps = [...steps, newStepToAdd]
+      const response = await fetch('/api/settings/qc-steps', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ steps: updatedSteps }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to save')
+      }
+
+      toast({
+        title: 'Step Added & Saved!',
+        description: 'New production step added and saved to database successfully.',
+      })
+      
+      // Reload steps from database to ensure we're in sync
+      await loadCurrentSteps()
+    } catch (error) {
+      console.error('Error saving new step to database:', error)
+      toast({
+        title: 'Step Added Locally',
+        description: 'Step added but failed to save to database. Please click "Save All Changes" to persist.',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsAddingStep(false)
+    }
   }
 
-  const handleDeleteStep = (valueToDelete: string) => {
-    setSteps(prev => prev.filter(step => step.value !== valueToDelete))
-    toast({
-      title: 'Step Deleted',
-      description: 'Production step removed successfully.',
-    })
+  const handleDeleteStep = async (valueToDelete: string) => {
+    // Remove from local state first
+    const updatedSteps = steps.filter(step => step.value !== valueToDelete)
+    setSteps(updatedSteps)
+
+    // Immediately save to database
+    try {
+      const response = await fetch('/api/settings/qc-steps', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ steps: updatedSteps }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to save')
+      }
+
+      toast({
+        title: 'Step Deleted & Saved!',
+        description: 'Production step removed and saved to database successfully.',
+      })
+      
+      // Reload steps from database to ensure we're in sync
+      await loadCurrentSteps()
+    } catch (error) {
+      console.error('Error saving deletion to database:', error)
+      toast({
+        title: 'Step Deleted Locally',
+        description: 'Step removed but failed to save to database. Please click "Save All Changes" to persist.',
+        variant: 'destructive'
+      })
+    }
   }
 
   const handleEditStart = (step: ProductionStep) => {
@@ -435,7 +524,7 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
     setEditingValues({ value: step.value, label: step.label })
   }
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editingValues.value || !editingValues.label) {
       toast({
         title: 'Invalid Input',
@@ -455,17 +544,46 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
       return
     }
 
-    setSteps(prev => prev.map(step => 
+    // Update local state first
+    const updatedSteps = steps.map(step => 
       step.value === editingId 
         ? { value: editingValues.value, label: editingValues.label }
         : step
-    ))
+    )
+    setSteps(updatedSteps)
     setEditingId(null)
     setEditingValues({ value: '', label: '' })
-    toast({
-      title: 'Step Updated',
-      description: 'Production step updated successfully.',
-    })
+
+    // Immediately save to database
+    try {
+      const response = await fetch('/api/settings/qc-steps', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ steps: updatedSteps }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to save')
+      }
+
+      toast({
+        title: 'Step Updated & Saved!',
+        description: 'Production step updated and saved to database successfully.',
+      })
+      
+      // Reload steps from database to ensure we're in sync
+      await loadCurrentSteps()
+    } catch (error) {
+      console.error('Error saving edit to database:', error)
+      toast({
+        title: 'Step Updated Locally',
+        description: 'Step updated but failed to save to database. Please click "Save All Changes" to persist.',
+        variant: 'destructive'
+      })
+    }
   }
 
   const handleEditCancel = () => {
@@ -505,39 +623,6 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
       })
     } finally {
       setIsSaving(false)
-    }
-  }
-
-  const handlePopulateChecklists = async () => {
-    setIsPopulatingChecklists(true)
-    try {
-      const response = await fetch('/api/admin/populate-qc-checklists', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to populate checklists')
-      }
-
-      const data = await response.json()
-      
-      toast({
-        title: 'Success!',
-        description: `Populated ${data.totalItems} checklist items across ${data.stepsProcessed} production steps.`,
-      })
-    } catch (error) {
-      console.error('Error populating checklists:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to populate checklist items. Please try again.',
-        variant: 'destructive'
-      })
-    } finally {
-      setIsPopulatingChecklists(false)
     }
   }
 
@@ -660,9 +745,18 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
               </p>
             </div>
           </div>
-          <Button onClick={handleAddStep} className="mt-4">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Step
+          <Button onClick={handleAddStep} className="mt-4" disabled={isAddingStep}>
+            {isAddingStep ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Adding...
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Step
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>
@@ -677,24 +771,6 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button
-              onClick={handlePopulateChecklists}
-              disabled={isPopulatingChecklists}
-              variant="outline"
-              className="border-blue-500 text-blue-600 hover:bg-blue-50"
-            >
-              {isPopulatingChecklists ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Populating...
-                </>
-              ) : (
-                <>
-                  <Database className="h-4 w-4 mr-2" />
-                  Populate Checklists
-                </>
-              )}
-            </Button>
             <Button 
               onClick={handleSaveToDatabase} 
               disabled={isSaving}

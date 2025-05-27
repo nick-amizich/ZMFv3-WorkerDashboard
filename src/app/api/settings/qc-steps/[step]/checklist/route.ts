@@ -28,6 +28,8 @@ export async function GET(
 
     const { step } = await params
     const stepValue = decodeURIComponent(step)
+    
+    console.log(`[QC Checklist API] Fetching checklist items for step: ${stepValue}`)
 
     // Get checklist items for the specified step
     const { data: items, error } = await supabase
@@ -38,18 +40,19 @@ export async function GET(
       .order('sort_order')
 
     if (error) {
-      console.error('Database error:', error)
+      console.error('[QC Checklist API] Database error:', error)
       const response = NextResponse.json({ error: 'Failed to fetch checklist items' }, { status: 500 })
       ApiLogger.logResponse(logContext, response, 'Database error fetching checklist items')
       return response
     }
 
+    console.log(`[QC Checklist API] Found ${items?.length || 0} items for step ${stepValue}`)
     const response = NextResponse.json({ items: items || [] })
     ApiLogger.logResponse(logContext, response, `Retrieved ${items?.length || 0} checklist items for step ${stepValue}`)
     return response
 
   } catch (error) {
-    console.error('Error fetching checklist items:', error)
+    console.error('[QC Checklist API] Error fetching checklist items:', error)
     const errorResponse = NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     ApiLogger.logResponse(logContext, errorResponse, 'Internal server error')
     return errorResponse
@@ -89,10 +92,41 @@ export async function POST(
     const { step } = await params
     const stepValue = decodeURIComponent(step)
     const { items } = await request.json()
+    
+    console.log(`[QC Checklist API] Saving ${items?.length || 0} items for step: ${stepValue}`)
+
+    // CRITICAL SAFETY CHECK: Prevent empty/null stepValue which could cause mass deletion
+    if (!stepValue || stepValue.trim() === '' || stepValue === 'undefined' || stepValue === 'null') {
+      console.error('[QC Checklist API] CRITICAL ERROR: stepValue is empty/null/undefined:', stepValue)
+      const response = NextResponse.json({ 
+        error: 'Invalid production step value. Cannot be empty or null.',
+        stepValue: stepValue 
+      }, { status: 400 })
+      ApiLogger.logResponse(logContext, response, 'Empty stepValue blocked')
+      return response
+    }
 
     if (!Array.isArray(items)) {
       const response = NextResponse.json({ error: 'Invalid items data' }, { status: 400 })
       ApiLogger.logResponse(logContext, response, 'Invalid items data format')
+      return response
+    }
+
+    // CRITICAL: Verify the production step exists BEFORE doing any deletes
+    const { data: stepExists, error: stepCheckError } = await supabase
+      .from('qc_production_steps' as any)
+      .select('value')
+      .eq('value', stepValue)
+      .eq('is_active', true)
+      .single()
+
+    if (stepCheckError || !stepExists) {
+      console.error('[QC Checklist API] Production step validation failed:', stepCheckError)
+      const response = NextResponse.json({ 
+        error: `Production step '${stepValue}' not found. Please ensure you're editing a valid production step.`,
+        details: stepCheckError?.message 
+      }, { status: 404 })
+      ApiLogger.logResponse(logContext, response, 'Production step not found')
       return response
     }
 
@@ -107,54 +141,61 @@ export async function POST(
       }
     }
 
-    // Verify the production step exists
-    const { data: stepExists } = await supabase
-      .from('qc_production_steps' as any)
-      .select('value')
-      .eq('value', stepValue)
-      .eq('is_active', true)
-      .single()
+    console.log(`[QC Checklist API] Step validation passed for: ${stepValue}`)
 
-    if (!stepExists) {
-      const response = NextResponse.json({ error: 'Production step not found' }, { status: 404 })
-      ApiLogger.logResponse(logContext, response, 'Production step not found')
+    // DOUBLE SAFETY CHECK: Verify stepValue before deletion
+    if (!stepValue || stepValue.trim() === '') {
+      console.error('[QC Checklist API] CRITICAL ERROR: stepValue is empty at deletion point:', stepValue)
+      const response = NextResponse.json({ error: 'Cannot delete items: stepValue is empty' }, { status: 500 })
+      ApiLogger.logResponse(logContext, response, 'Empty stepValue at deletion blocked')
       return response
     }
 
-    // Start transaction - first delete all existing items for this step
+    // Log exactly what we're about to delete
+    console.log(`[QC Checklist API] About to delete items WHERE production_step_value = '${stepValue}'`)
+
+    // Only delete items for THIS specific step (not all items)
     const { error: deleteError } = await supabase
       .from('qc_checklist_items' as any)
       .delete()
       .eq('production_step_value', stepValue)
 
     if (deleteError) {
-      console.error('Database error deleting items:', deleteError)
+      console.error('[QC Checklist API] Database error deleting items:', deleteError)
       const response = NextResponse.json({ error: 'Failed to update checklist items' }, { status: 500 })
       ApiLogger.logResponse(logContext, response, 'Database error deleting items')
       return response
     }
 
+    console.log(`[QC Checklist API] Deleted existing items for step: ${stepValue}`)
+
     // Insert new items with proper sort order
-    const itemsToInsert = items.map((item, index) => ({
-      production_step_value: stepValue,
-      item_text: item.item_text,
-      sort_order: (index + 1) * 10, // 10, 20, 30, etc.
-      is_active: true
-    }))
+    if (items.length > 0) {
+      const itemsToInsert = items.map((item, index) => ({
+        production_step_value: stepValue,
+        item_text: item.item_text,
+        sort_order: (index + 1) * 10, // 10, 20, 30, etc.
+        is_active: true
+      }))
 
-    const { error: insertError } = await supabase
-      .from('qc_checklist_items' as any)
-      .insert(itemsToInsert as any)
+      const { error: insertError } = await supabase
+        .from('qc_checklist_items' as any)
+        .insert(itemsToInsert as any)
 
-    if (insertError) {
-      console.error('Database error inserting items:', insertError)
-      const response = NextResponse.json({ error: 'Failed to save checklist items' }, { status: 500 })
-      ApiLogger.logResponse(logContext, response, 'Database error inserting items')
-      return response
+      if (insertError) {
+        console.error('[QC Checklist API] Database error inserting items:', insertError)
+        const response = NextResponse.json({ error: 'Failed to save checklist items' }, { status: 500 })
+        ApiLogger.logResponse(logContext, response, 'Database error inserting items')
+        return response
+      }
+
+      console.log(`[QC Checklist API] Successfully inserted ${items.length} items for step ${stepValue}`)
     }
 
     // Revalidate the worker QC checklist page so it picks up the new items
     revalidatePath('/worker/qc-checklist')
+    
+    console.log(`[QC Checklist API] Successfully saved ${items.length} items for step ${stepValue}`)
 
     const response = NextResponse.json({ 
       success: true, 
@@ -165,7 +206,7 @@ export async function POST(
     return response
 
   } catch (error) {
-    console.error('Error saving checklist items:', error)
+    console.error('[QC Checklist API] Error saving checklist items:', error)
     const errorResponse = NextResponse.json({ error: 'Internal server error' }, { status: 500 })
     ApiLogger.logResponse(logContext, errorResponse, 'Internal server error')
     return errorResponse

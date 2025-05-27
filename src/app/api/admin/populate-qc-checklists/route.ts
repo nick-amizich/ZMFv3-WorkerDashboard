@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
       .order('sort_order')
 
     if (stepsError) {
-      console.error('Error fetching production steps:', stepsError)
+      console.error('[Populate QC] Error fetching production steps:', stepsError)
       const response = NextResponse.json({ error: 'Failed to fetch production steps' }, { status: 500 })
       ApiLogger.logResponse(logContext, response, 'Error fetching production steps')
       return response
@@ -164,6 +164,7 @@ export async function POST(request: NextRequest) {
 
     // Type assertion for the production steps
     const steps = (productionSteps as unknown) as Array<{ value: string; label: string }> || []
+    console.log(`[Populate QC] Found ${steps.length} production steps`)
 
     // Clear existing checklist items
     const { error: deleteError } = await supabase
@@ -172,11 +173,13 @@ export async function POST(request: NextRequest) {
       .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all
 
     if (deleteError) {
-      console.error('Error clearing existing items:', deleteError)
+      console.error('[Populate QC] Error clearing existing items:', deleteError)
       const response = NextResponse.json({ error: 'Failed to clear existing checklist items' }, { status: 500 })
       ApiLogger.logResponse(logContext, response, 'Error clearing existing items')
       return response
     }
+
+    console.log('[Populate QC] Cleared existing checklist items')
 
     // Insert new checklist items for each production step
     let totalItemsInserted = 0
@@ -186,9 +189,11 @@ export async function POST(request: NextRequest) {
       const items = checklistData[step.value as keyof typeof checklistData]
       
       if (!items) {
-        console.log(`No checklist items found for step: ${step.value} (${step.label})`)
+        console.log(`[Populate QC] No checklist items found for step: ${step.value} (${step.label})`)
         continue
       }
+
+      console.log(`[Populate QC] Processing step: ${step.value} with ${items.length} items`)
 
       const itemsToInsert = items.map((itemText: string, index: number) => ({
         production_step_value: step.value,
@@ -202,7 +207,7 @@ export async function POST(request: NextRequest) {
         .insert(itemsToInsert as any)
 
       if (insertError) {
-        console.error(`Error inserting items for ${step.value}:`, insertError)
+        console.error(`[Populate QC] Error inserting items for ${step.value}:`, insertError)
         continue
       }
 
@@ -212,7 +217,11 @@ export async function POST(request: NextRequest) {
         value: step.value,
         itemCount: items.length
       })
+      
+      console.log(`[Populate QC] Successfully inserted ${items.length} items for ${step.value}`)
     }
+
+    console.log(`[Populate QC] Total items inserted: ${totalItemsInserted}`)
 
     const response = NextResponse.json({ 
       success: true,

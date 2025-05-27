@@ -8,7 +8,8 @@ Project: Headphone manufacturing company backend
 Stack: Next.js 15.3.2 + Supabase + TypeScript + React 18.2.0
 
 🚨 CRITICAL: Ask for Clarification
-If any requirement is unclear or seems to conflict with existing patterns, STOP and ASK before implementing. Better to clarify than to build the wrong thing.
+- If any requirement is unclear or seems to conflict with existing patterns, STOP and ASK before implementing. Better to clarify than to build the wrong thing.
+- Always use the supabase project id: kjdicpudxqxenhjwdrzg
 
   
 Do not run any dev servers, I will hand that when testing so no need. I am talking npm run dev commands
