@@ -54,6 +54,24 @@ export async function POST(request: NextRequest) {
         ApiLogger.logResponse(logContext, response, 'Invalid step format')
         return response
       }
+
+      // AUTO-FORMAT: Convert value to lowercase with underscores
+      const formattedValue = step.value
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '_')  // Replace any non-alphanumeric (except underscore) with underscore
+        .replace(/_+/g, '_')          // Replace multiple underscores with single underscore
+        .replace(/^_|_$/g, '')        // Remove leading/trailing underscores
+
+      if (!formattedValue) {
+        const response = NextResponse.json({ 
+          error: `Step value '${step.value}' is invalid. Must contain at least one letter or number.` 
+        }, { status: 400 })
+        ApiLogger.logResponse(logContext, response, 'Invalid step value format')
+        return response
+      }
+
+      // Update the step with the formatted value
+      step.value = formattedValue
     }
 
     // SAFER APPROACH: Get existing steps and update/insert/delete as needed

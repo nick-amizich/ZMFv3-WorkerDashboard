@@ -431,8 +431,24 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
       return
     }
 
-    // Check for duplicate values
-    if (steps.some(step => step.value === newStep.value)) {
+    // AUTO-FORMAT: Convert value to lowercase with underscores
+    const formattedValue = newStep.value
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')  // Replace any non-alphanumeric (except underscore) with underscore
+      .replace(/_+/g, '_')          // Replace multiple underscores with single underscore
+      .replace(/^_|_$/g, '')        // Remove leading/trailing underscores
+
+    if (!formattedValue) {
+      toast({
+        title: 'Invalid Value',
+        description: 'Step value must contain at least one letter or number.',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    // Check for duplicate values (use formatted value)
+    if (steps.some(step => step.value === formattedValue)) {
       toast({
         title: 'Duplicate Value',
         description: 'A step with this value already exists.',
@@ -443,8 +459,8 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
 
     setIsAddingStep(true)
 
-    // Add to local state first
-    const newStepToAdd = { ...newStep }
+    // Add to local state first (with formatted value)
+    const newStepToAdd = { ...newStep, value: formattedValue }
     setSteps(prev => [...prev, newStepToAdd])
     setNewStep({ value: '', label: '' })
 
@@ -535,8 +551,24 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
       return
     }
 
-    // Check for duplicate values (excluding the current item)
-    if (steps.some(step => step.value === editingValues.value && step.value !== editingId)) {
+    // AUTO-FORMAT: Convert value to lowercase with underscores
+    const formattedValue = editingValues.value
+      .toLowerCase()
+      .replace(/[^a-z0-9_]/g, '_')  // Replace any non-alphanumeric (except underscore) with underscore
+      .replace(/_+/g, '_')          // Replace multiple underscores with single underscore
+      .replace(/^_|_$/g, '')        // Remove leading/trailing underscores
+
+    if (!formattedValue) {
+      toast({
+        title: 'Invalid Value',
+        description: 'Step value must contain at least one letter or number.',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    // Check for duplicate values (excluding the current item, use formatted value)
+    if (steps.some(step => step.value === formattedValue && step.value !== editingId)) {
       toast({
         title: 'Duplicate Value',
         description: 'A step with this value already exists.',
@@ -545,12 +577,10 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
       return
     }
 
-
-
-    // Update local state first
+    // Update local state first (with formatted value)
     const updatedSteps = steps.map(step => 
       step.value === editingId 
-        ? { value: editingValues.value, label: editingValues.label }
+        ? { value: formattedValue, label: editingValues.label }
         : step
     )
     setSteps(updatedSteps)
@@ -731,7 +761,7 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
                 placeholder="e.g., sanding_pre_work"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Use lowercase with underscores (no spaces)
+                Will be auto-formatted to lowercase with underscores (e.g., "Test Step" → "test_step")
               </p>
             </div>
             <div>
