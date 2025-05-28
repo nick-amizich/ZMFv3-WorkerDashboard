@@ -18,6 +18,18 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const { toast } = useToast()
 
+  // Clear any stale auth state on mount
+  useEffect(() => {
+    const clearStaleAuth = async () => {
+      const supabase = createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        await supabase.auth.signOut()
+      }
+    }
+    clearStaleAuth()
+  }, [])
+
   // Handle URL parameters for confirmations and errors
   useEffect(() => {
     const confirmed = searchParams.get('confirmed')
@@ -51,63 +63,76 @@ function LoginForm() {
     e.preventDefault()
     setLoading(true)
 
-    const supabase = createClient()
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const supabase = createClient()
+      
+      // First ensure we're signed out
+      await supabase.auth.signOut()
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    if (error) {
+      if (error) {
+        toast({
+          title: 'Login failed',
+          description: error.message,
+          variant: 'destructive',
+        })
+        setLoading(false)
+        return
+      }
+
+      if (data.user) {
+        // Check worker status to determine redirect
+        const { data: worker, error: workerError } = await supabase
+          .from('workers')
+          .select('role, is_active')
+          .eq('auth_user_id', data.user.id)
+          .single()
+
+        if (workerError || !worker) {
+          toast({
+            title: 'Access denied',
+            description: 'No worker profile found. Please contact your administrator.',
+            variant: 'destructive',
+          })
+          await supabase.auth.signOut()
+          setLoading(false)
+          return
+        }
+
+        if (!worker.is_active) {
+          toast({
+            title: 'Account Inactive',
+            description: 'Your account requires manager approval. Please contact your supervisor.',
+            variant: 'destructive',
+          })
+          router.push('/unauthorized')
+          setLoading(false)
+          return
+        }
+
+        // Successful login - redirect based on role
+        if (['manager', 'supervisor'].includes(worker.role || '')) {
+          router.push('/manager')
+        } else {
+          router.push('/worker')
+        }
+        
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Login error:', error)
       toast({
         title: 'Login failed',
-        description: error.message,
+        description: 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       })
+    } finally {
       setLoading(false)
-      return
     }
-
-    if (data.user) {
-      // Check worker status to determine redirect
-      const { data: worker, error: workerError } = await supabase
-        .from('workers')
-        .select('role, is_active')
-        .eq('auth_user_id', data.user.id)
-        .single()
-
-      if (workerError || !worker) {
-        toast({
-          title: 'Access denied',
-          description: 'No worker profile found. Please contact your administrator.',
-          variant: 'destructive',
-        })
-        await supabase.auth.signOut()
-        setLoading(false)
-        return
-      }
-
-      if (!worker.is_active) {
-        toast({
-          title: 'Account Inactive',
-          description: 'Your account requires manager approval. Please contact your supervisor.',
-          variant: 'destructive',
-        })
-        router.push('/unauthorized')
-        setLoading(false)
-        return
-      }
-
-      // Successful login - redirect based on role
-      if (['manager', 'supervisor'].includes(worker.role || '')) {
-        router.push('/manager')
-      } else {
-        router.push('/worker')
-      }
-      
-      router.refresh()
-    }
-
-    setLoading(false)
   }
 
   return (
