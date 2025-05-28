@@ -174,6 +174,7 @@ function SortableStepItem({
               value={editingValues.value}
               onChange={(e) => onEditValueChange(e.target.value)}
               placeholder="Step value"
+              className="font-mono text-sm"
             />
             <Input
               value={editingValues.label}
@@ -543,6 +544,8 @@ export function QCStepsManager({ initialSteps }: QCStepsManagerProps) {
       })
       return
     }
+
+
 
     // Update local state first
     const updatedSteps = steps.map(step => 

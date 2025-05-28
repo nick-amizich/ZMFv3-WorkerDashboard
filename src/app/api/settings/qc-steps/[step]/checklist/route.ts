@@ -106,6 +106,17 @@ export async function POST(
       return response
     }
 
+    // ADDITIONAL SAFETY: Validate stepValue format (should be lowercase with underscores)
+    if (!/^[a-z_]+$/.test(stepValue)) {
+      console.error('[QC Checklist API] CRITICAL ERROR: stepValue has invalid format:', stepValue)
+      const response = NextResponse.json({ 
+        error: 'Invalid production step value format. Must be lowercase letters and underscores only.',
+        stepValue: stepValue 
+      }, { status: 400 })
+      ApiLogger.logResponse(logContext, response, 'Invalid stepValue format blocked')
+      return response
+    }
+
     if (!Array.isArray(items)) {
       const response = NextResponse.json({ error: 'Invalid items data' }, { status: 400 })
       ApiLogger.logResponse(logContext, response, 'Invalid items data format')
