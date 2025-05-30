@@ -74,7 +74,11 @@ export default async function WorkerRepairsPage() {
 
   return (
     <div className="p-6">
-      <RepairDashboard initialRepairs={repairsWithTime} workers={workers || []} />
+      <RepairDashboard 
+        initialRepairs={repairsWithTime} 
+        workers={workers || []} 
+        currentWorkerId={worker.id}
+      />
     </div>
   )
 }

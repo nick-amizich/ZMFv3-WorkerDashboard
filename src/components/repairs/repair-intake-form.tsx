@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Upload, Save, Send, Lightbulb, X, ImageIcon } from "lucide-react"
+import { Upload, Save, Send, Lightbulb, X, ImageIcon, User, Building2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { CreateRepairInput } from "@/types/repairs"
 
@@ -19,6 +19,8 @@ export default function RepairIntakeForm() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
+  const [currentStep, setCurrentStep] = useState<'selection' | 'form'>('selection')
+  const [repairSource, setRepairSource] = useState<'customer' | 'internal'>('customer')
 
   const [formData, setFormData] = useState<Partial<CreateRepairInput>>({
     orderNumber: "",
@@ -130,22 +132,25 @@ export default function RepairIntakeForm() {
   }
 
   const validateForm = (): boolean => {
-    if (!formData.customerName?.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Customer name is required",
-        variant: "destructive",
-      })
-      return false
-    }
+    // Only validate customer fields for customer repairs
+    if (repairSource === 'customer') {
+      if (!formData.customerName?.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Customer name is required",
+          variant: "destructive",
+        })
+        return false
+      }
 
-    if (!formData.customerEmail?.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Customer email is required",
-        variant: "destructive",
-      })
-      return false
+      if (!formData.customerEmail?.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Customer email is required",
+          variant: "destructive",
+        })
+        return false
+      }
     }
 
     if (!formData.model) {
@@ -205,6 +210,11 @@ export default function RepairIntakeForm() {
 
       const repairData: CreateRepairInput = {
         ...formData as CreateRepairInput,
+        repairSource,
+        // For internal repairs, set default customer info
+        customerName: repairSource === 'internal' ? 'Internal Repair' : formData.customerName || '',
+        customerEmail: repairSource === 'internal' ? 'internal@zmfheadphones.com' : formData.customerEmail || '',
+        orderType: repairSource === 'internal' ? 'internal_qc' : (formData.orderType || 'customer_return'),
         issues
       }
 
@@ -258,10 +268,64 @@ export default function RepairIntakeForm() {
 
   const aiSuggestion = getAISuggestion()
 
+  if (currentStep === 'selection') {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-2">New Repair Intake</h1>
+          <p className="text-gray-600">What type of repair are you creating?</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+          {/* Customer Repair */}
+          <Card 
+            className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-blue-500"
+            onClick={() => {
+              setRepairSource('customer')
+              setCurrentStep('form')
+            }}
+          >
+            <CardContent className="p-8 text-center">
+              <User className="h-12 w-12 mx-auto mb-4 text-blue-600" />
+              <h3 className="text-xl font-semibold mb-2">Customer Repair</h3>
+              <p className="text-gray-600">Repair for a customer return or warranty claim</p>
+            </CardContent>
+          </Card>
+
+          {/* Internal Repair */}
+          <Card 
+            className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-blue-500"
+            onClick={() => {
+              setRepairSource('internal')
+              setCurrentStep('form')
+            }}
+          >
+            <CardContent className="p-8 text-center">
+              <Building2 className="h-12 w-12 mx-auto mb-4 text-blue-600" />
+              <h3 className="text-xl font-semibold mb-2">Internal Repair</h3>
+              <p className="text-gray-600">Internal QC or production repair</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">New Repair Intake</h1>
+        <div>
+          <Button 
+            variant="ghost" 
+            onClick={() => setCurrentStep('selection')}
+            className="mb-2"
+          >
+            ← Back to Selection
+          </Button>
+          <h1 className="text-3xl font-bold">
+            New {repairSource === 'customer' ? 'Customer' : 'Internal'} Repair
+          </h1>
+        </div>
         <div className="flex space-x-2">
           {localStorage.getItem("repairDraft") && (
             <Button variant="outline" onClick={loadDraft}>
@@ -276,12 +340,13 @@ export default function RepairIntakeForm() {
         </div>
       </div>
 
-      {/* Customer Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Customer Information</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      {/* Customer Information - Only for customer repairs */}
+      {repairSource === 'customer' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="orderNumber">Order Number</Label>
@@ -323,48 +388,9 @@ export default function RepairIntakeForm() {
               />
             </div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="repairSource">Repair Source *</Label>
-              <Select value={formData.repairSource} onValueChange={(value) => handleInputChange("repairSource", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select source" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="customer">Customer</SelectItem>
-                  <SelectItem value="internal">Internal</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="orderType">Order Type *</Label>
-              <Select value={formData.orderType} onValueChange={(value) => handleInputChange("orderType", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="customer_return">Customer Return</SelectItem>
-                  <SelectItem value="warranty">Warranty</SelectItem>
-                  <SelectItem value="internal_qc">Internal QC</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="priority">Priority</Label>
-              <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="standard">Standard</SelectItem>
-                  <SelectItem value="rush">Rush</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
         </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {/* Product Information */}
       <Card>
@@ -416,6 +442,30 @@ export default function RepairIntakeForm() {
                   <SelectItem value="sonic">Sonic Repair</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="priority">Priority</Label>
+              <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">Standard</SelectItem>
+                  <SelectItem value="rush">Rush</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                value={formData.location}
+                onChange={(e) => handleInputChange("location", e.target.value)}
+                placeholder="e.g., Repair Wall, Bench 1"
+              />
             </div>
           </div>
 

@@ -36,9 +36,10 @@ interface Worker {
 interface RepairDashboardProps {
   initialRepairs: RepairOrder[]
   workers?: Worker[]
+  currentWorkerId?: string
 }
 
-export default function RepairDashboard({ initialRepairs, workers = [] }: RepairDashboardProps) {
+export default function RepairDashboard({ initialRepairs, workers = [], currentWorkerId }: RepairDashboardProps) {
   const { toast } = useToast()
   const router = useRouter()
   const [repairs, setRepairs] = useState<RepairOrder[]>(initialRepairs)
@@ -56,6 +57,7 @@ export default function RepairDashboard({ initialRepairs, workers = [] }: Repair
   const [statusFilter, setStatusFilter] = useState("all")
   const [priorityFilter, setPriorityFilter] = useState("all")
   const [repairSourceFilter, setRepairSourceFilter] = useState<"all" | "customer" | "internal">("all")
+  const [assignmentFilter, setAssignmentFilter] = useState<"all" | "my_repairs" | "unassigned">("all")
   
   const [customerNoteDialogOpen, setCustomerNoteDialogOpen] = useState(false)
   const [selectedCustomerNote, setSelectedCustomerNote] = useState("")
@@ -91,10 +93,14 @@ export default function RepairDashboard({ initialRepairs, workers = [] }: Repair
       const matchesPriority = priorityFilter === "all" || repair.priority === priorityFilter
       const matchesRepairType = repairTypeFilter === "all" || repair.repair_type === repairTypeFilter
       const matchesRepairSource = repairSourceFilter === "all" || repair.repair_source === repairSourceFilter
+      const matchesAssignment = 
+        assignmentFilter === "all" || 
+        (assignmentFilter === "my_repairs" && repair.assigned_to?.id === currentWorkerId) ||
+        (assignmentFilter === "unassigned" && !repair.assigned_to)
 
-      return matchesSearch && matchesStatus && matchesPriority && matchesRepairType && matchesRepairSource
+      return matchesSearch && matchesStatus && matchesPriority && matchesRepairType && matchesRepairSource && matchesAssignment
     })
-  }, [repairs, searchTerm, statusFilter, priorityFilter, repairTypeFilter, repairSourceFilter])
+  }, [repairs, searchTerm, statusFilter, priorityFilter, repairTypeFilter, repairSourceFilter, assignmentFilter, currentWorkerId])
 
   // Calculate dashboard stats
   const stats = useMemo(() => {
@@ -554,6 +560,19 @@ export default function RepairDashboard({ initialRepairs, workers = [] }: Repair
             <SelectItem value="internal">Internal Repairs</SelectItem>
           </SelectContent>
         </Select>
+
+        {currentWorkerId && (
+          <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="All Assignments" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Repairs</SelectItem>
+              <SelectItem value="my_repairs">My Repairs</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Repair Queue with Tabs */}
