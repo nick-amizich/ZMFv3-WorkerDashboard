@@ -36,6 +36,90 @@ export type Database = {
         }
         Relationships: []
       }
+      application_logs: {
+        Row: {
+          api_duration: number | null
+          api_ip: string | null
+          api_method: string | null
+          api_status_code: number | null
+          api_url: string | null
+          api_user_agent: string | null
+          context: string
+          correlation_id: string | null
+          created_at: string | null
+          db_duration: number | null
+          db_query: string | null
+          db_row_count: number | null
+          error_code: string | null
+          error_message: string | null
+          error_name: string | null
+          error_stack: string | null
+          id: string
+          level: number
+          memory_usage: number | null
+          message: string
+          metadata: Json | null
+          performance_duration: number | null
+          request_id: string | null
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          api_duration?: number | null
+          api_ip?: string | null
+          api_method?: string | null
+          api_status_code?: number | null
+          api_url?: string | null
+          api_user_agent?: string | null
+          context?: string
+          correlation_id?: string | null
+          created_at?: string | null
+          db_duration?: number | null
+          db_query?: string | null
+          db_row_count?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          error_name?: string | null
+          error_stack?: string | null
+          id?: string
+          level: number
+          memory_usage?: number | null
+          message: string
+          metadata?: Json | null
+          performance_duration?: number | null
+          request_id?: string | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          api_duration?: number | null
+          api_ip?: string | null
+          api_method?: string | null
+          api_status_code?: number | null
+          api_url?: string | null
+          api_user_agent?: string | null
+          context?: string
+          correlation_id?: string | null
+          created_at?: string | null
+          db_duration?: number | null
+          db_query?: string | null
+          db_row_count?: number | null
+          error_code?: string | null
+          error_message?: string | null
+          error_name?: string | null
+          error_stack?: string | null
+          id?: string
+          level?: number
+          memory_usage?: number | null
+          message?: string
+          metadata?: Json | null
+          performance_duration?: number | null
+          request_id?: string | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       automation_execution_log: {
         Row: {
           actions_executed: Json | null
@@ -923,6 +1007,74 @@ export type Database = {
           },
         ]
       }
+      qc_checklist_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean
+          item_text: string
+          production_step_value: string
+          sort_order: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          item_text: string
+          production_step_value: string
+          sort_order?: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          item_text?: string
+          production_step_value?: string
+          sort_order?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qc_checklist_items_production_step_value_fkey"
+            columns: ["production_step_value"]
+            isOneToOne: false
+            referencedRelation: "qc_production_steps"
+            referencedColumns: ["value"]
+          },
+        ]
+      }
+      qc_production_steps: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       qc_results: {
         Row: {
           created_at: string | null
@@ -978,6 +1130,57 @@ export type Database = {
           },
           {
             foreignKeyName: "qc_results_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      qc_submissions: {
+        Row: {
+          checklist_items: Json
+          created_at: string | null
+          id: string
+          overall_notes: string | null
+          product_info: Json | null
+          production_step: string
+          submitted_at: string | null
+          worker_id: string
+          worker_name: string
+        }
+        Insert: {
+          checklist_items: Json
+          created_at?: string | null
+          id?: string
+          overall_notes?: string | null
+          product_info?: Json | null
+          production_step: string
+          submitted_at?: string | null
+          worker_id: string
+          worker_name: string
+        }
+        Update: {
+          checklist_items?: Json
+          created_at?: string | null
+          id?: string
+          overall_notes?: string | null
+          product_info?: Json | null
+          production_step?: string
+          submitted_at?: string | null
+          worker_id?: string
+          worker_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qc_submissions_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "worker_productivity_metrics"
+            referencedColumns: ["worker_id"]
+          },
+          {
+            foreignKeyName: "qc_submissions_worker_id_fkey"
             columns: ["worker_id"]
             isOneToOne: false
             referencedRelation: "workers"
@@ -1248,6 +1451,513 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      repair_actions: {
+        Row: {
+          action_description: string
+          action_type: string
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          performed_by: string | null
+          repair_order_id: string | null
+          time_spent_minutes: number | null
+        }
+        Insert: {
+          action_description: string
+          action_type: string
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          performed_by?: string | null
+          repair_order_id?: string | null
+          time_spent_minutes?: number | null
+        }
+        Update: {
+          action_description?: string
+          action_type?: string
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          performed_by?: string | null
+          repair_order_id?: string | null
+          time_spent_minutes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_actions_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "worker_productivity_metrics"
+            referencedColumns: ["worker_id"]
+          },
+          {
+            foreignKeyName: "repair_actions_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repair_actions_repair_order_id_fkey"
+            columns: ["repair_order_id"]
+            isOneToOne: false
+            referencedRelation: "repair_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repair_issues: {
+        Row: {
+          category: string
+          created_at: string | null
+          discovered_at: string | null
+          discovered_by: string | null
+          id: string
+          repair_order_id: string | null
+          severity: string | null
+          specific_issue: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          discovered_at?: string | null
+          discovered_by?: string | null
+          id?: string
+          repair_order_id?: string | null
+          severity?: string | null
+          specific_issue: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          discovered_at?: string | null
+          discovered_by?: string | null
+          id?: string
+          repair_order_id?: string | null
+          severity?: string | null
+          specific_issue?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_issues_discovered_by_fkey"
+            columns: ["discovered_by"]
+            isOneToOne: false
+            referencedRelation: "worker_productivity_metrics"
+            referencedColumns: ["worker_id"]
+          },
+          {
+            foreignKeyName: "repair_issues_discovered_by_fkey"
+            columns: ["discovered_by"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repair_issues_repair_order_id_fkey"
+            columns: ["repair_order_id"]
+            isOneToOne: false
+            referencedRelation: "repair_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repair_knowledge_base: {
+        Row: {
+          created_at: string | null
+          id: string
+          issue_category: string
+          issue_description: string
+          model: string
+          parts_used: Json | null
+          repair_order_id: string | null
+          solution_description: string
+          success_rate: number | null
+          tags: string[] | null
+          technician_id: string | null
+          technician_name: string | null
+          time_to_repair_minutes: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          issue_category: string
+          issue_description: string
+          model: string
+          parts_used?: Json | null
+          repair_order_id?: string | null
+          solution_description: string
+          success_rate?: number | null
+          tags?: string[] | null
+          technician_id?: string | null
+          technician_name?: string | null
+          time_to_repair_minutes?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          issue_category?: string
+          issue_description?: string
+          model?: string
+          parts_used?: Json | null
+          repair_order_id?: string | null
+          solution_description?: string
+          success_rate?: number | null
+          tags?: string[] | null
+          technician_id?: string | null
+          technician_name?: string | null
+          time_to_repair_minutes?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_knowledge_base_repair_order_id_fkey"
+            columns: ["repair_order_id"]
+            isOneToOne: false
+            referencedRelation: "repair_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repair_knowledge_base_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "worker_productivity_metrics"
+            referencedColumns: ["worker_id"]
+          },
+          {
+            foreignKeyName: "repair_knowledge_base_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repair_notifications: {
+        Row: {
+          body: string
+          created_at: string | null
+          id: string
+          notification_type: string | null
+          recipient_email: string
+          repair_order_id: string | null
+          sent_at: string | null
+          subject: string
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          id?: string
+          notification_type?: string | null
+          recipient_email: string
+          repair_order_id?: string | null
+          sent_at?: string | null
+          subject: string
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          id?: string
+          notification_type?: string | null
+          recipient_email?: string
+          repair_order_id?: string | null
+          sent_at?: string | null
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_notifications_repair_order_id_fkey"
+            columns: ["repair_order_id"]
+            isOneToOne: false
+            referencedRelation: "repair_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repair_orders: {
+        Row: {
+          approved_date: string | null
+          assigned_to: string | null
+          completed_date: string | null
+          created_at: string | null
+          created_by: string
+          customer_approved: boolean | null
+          customer_email: string
+          customer_name: string
+          customer_note: string | null
+          customer_phone: string | null
+          diagnosed_date: string | null
+          estimated_cost: number | null
+          final_cost: number | null
+          id: string
+          internal_notes: string | null
+          location: string | null
+          model: string
+          order_type: string
+          original_order_id: string | null
+          original_order_number: string | null
+          priority: string | null
+          received_date: string
+          repair_number: string
+          repair_source: string
+          repair_type: string
+          serial_number: string | null
+          shipped_date: string | null
+          started_date: string | null
+          status: string | null
+          updated_at: string | null
+          wood_type: string | null
+        }
+        Insert: {
+          approved_date?: string | null
+          assigned_to?: string | null
+          completed_date?: string | null
+          created_at?: string | null
+          created_by: string
+          customer_approved?: boolean | null
+          customer_email: string
+          customer_name: string
+          customer_note?: string | null
+          customer_phone?: string | null
+          diagnosed_date?: string | null
+          estimated_cost?: number | null
+          final_cost?: number | null
+          id?: string
+          internal_notes?: string | null
+          location?: string | null
+          model: string
+          order_type: string
+          original_order_id?: string | null
+          original_order_number?: string | null
+          priority?: string | null
+          received_date?: string
+          repair_number: string
+          repair_source: string
+          repair_type: string
+          serial_number?: string | null
+          shipped_date?: string | null
+          started_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          wood_type?: string | null
+        }
+        Update: {
+          approved_date?: string | null
+          assigned_to?: string | null
+          completed_date?: string | null
+          created_at?: string | null
+          created_by?: string
+          customer_approved?: boolean | null
+          customer_email?: string
+          customer_name?: string
+          customer_note?: string | null
+          customer_phone?: string | null
+          diagnosed_date?: string | null
+          estimated_cost?: number | null
+          final_cost?: number | null
+          id?: string
+          internal_notes?: string | null
+          location?: string | null
+          model?: string
+          order_type?: string
+          original_order_id?: string | null
+          original_order_number?: string | null
+          priority?: string | null
+          received_date?: string
+          repair_number?: string
+          repair_source?: string
+          repair_type?: string
+          serial_number?: string | null
+          shipped_date?: string | null
+          started_date?: string | null
+          status?: string | null
+          updated_at?: string | null
+          wood_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_orders_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "worker_productivity_metrics"
+            referencedColumns: ["worker_id"]
+          },
+          {
+            foreignKeyName: "repair_orders_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repair_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "worker_productivity_metrics"
+            referencedColumns: ["worker_id"]
+          },
+          {
+            foreignKeyName: "repair_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repair_orders_original_order_id_fkey"
+            columns: ["original_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repair_parts_used: {
+        Row: {
+          created_at: string | null
+          id: string
+          part_name: string
+          part_number: string | null
+          quantity: number
+          repair_action_id: string | null
+          unit_cost: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          part_name: string
+          part_number?: string | null
+          quantity?: number
+          repair_action_id?: string | null
+          unit_cost?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          part_name?: string
+          part_number?: string | null
+          quantity?: number
+          repair_action_id?: string | null
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_parts_used_repair_action_id_fkey"
+            columns: ["repair_action_id"]
+            isOneToOne: false
+            referencedRelation: "repair_actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repair_photos: {
+        Row: {
+          caption: string | null
+          id: string
+          photo_type: string | null
+          repair_order_id: string | null
+          storage_path: string
+          uploaded_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          caption?: string | null
+          id?: string
+          photo_type?: string | null
+          repair_order_id?: string | null
+          storage_path: string
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          caption?: string | null
+          id?: string
+          photo_type?: string | null
+          repair_order_id?: string | null
+          storage_path?: string
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_photos_repair_order_id_fkey"
+            columns: ["repair_order_id"]
+            isOneToOne: false
+            referencedRelation: "repair_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repair_photos_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "worker_productivity_metrics"
+            referencedColumns: ["worker_id"]
+          },
+          {
+            foreignKeyName: "repair_photos_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      repair_time_logs: {
+        Row: {
+          created_at: string | null
+          duration_minutes: number | null
+          end_time: string | null
+          id: string
+          repair_order_id: string | null
+          start_time: string
+          work_description: string | null
+          worker_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_minutes?: number | null
+          end_time?: string | null
+          id?: string
+          repair_order_id?: string | null
+          start_time: string
+          work_description?: string | null
+          worker_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_minutes?: number | null
+          end_time?: string | null
+          id?: string
+          repair_order_id?: string | null
+          start_time?: string
+          work_description?: string | null
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "repair_time_logs_repair_order_id_fkey"
+            columns: ["repair_order_id"]
+            isOneToOne: false
+            referencedRelation: "repair_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "repair_time_logs_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "worker_productivity_metrics"
+            referencedColumns: ["worker_id"]
+          },
+          {
+            foreignKeyName: "repair_time_logs_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       settings: {
         Row: {
@@ -2386,6 +3096,23 @@ export type Database = {
           },
         ]
       }
+      log_analytics: {
+        Row: {
+          avg_api_duration: number | null
+          avg_db_duration: number | null
+          context: string | null
+          debug_count: number | null
+          error_count: number | null
+          info_count: number | null
+          level: number | null
+          log_date: string | null
+          max_api_duration: number | null
+          max_db_duration: number | null
+          total_logs: number | null
+          warn_count: number | null
+        }
+        Relationships: []
+      }
       stage_durations: {
         Row: {
           batch_id: string | null
@@ -2506,6 +3233,14 @@ export type Database = {
       }
     }
     Functions: {
+      approve_worker: {
+        Args: { p_worker_id: string; p_approved_by_id: string }
+        Returns: boolean
+      }
+      cleanup_old_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       detect_workflow_bottlenecks: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -2516,13 +3251,52 @@ export type Database = {
           recommendation: string
         }[]
       }
+      generate_repair_number: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       generate_serial_number: {
         Args: { model: string; year?: number }
         Returns: string
       }
+      get_error_patterns: {
+        Args: { days?: number }
+        Returns: {
+          error_pattern: string
+          occurrences: number
+          first_seen: string
+          last_seen: string
+          contexts: string[]
+          sample_correlation_id: string
+        }[]
+      }
+      is_manager: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      reactivate_worker: {
+        Args: { p_worker_id: string; p_reactivated_by_id: string }
+        Returns: boolean
+      }
       refresh_analytics_views: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      reject_worker: {
+        Args: {
+          p_worker_id: string
+          p_rejected_by_id: string
+          p_reason: string
+        }
+        Returns: boolean
+      }
+      suspend_worker: {
+        Args: {
+          p_worker_id: string
+          p_suspended_by_id: string
+          p_reason: string
+        }
+        Returns: boolean
       }
     }
     Enums: {

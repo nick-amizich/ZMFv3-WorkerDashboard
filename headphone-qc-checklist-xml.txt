@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quality_control_checklist>
+    <title>Quality Control Checklist for Headphone Production</title>
+    
+    <section id="1" name="Inventory Intake">
+        <item name="Cup Count Verification">Ensure the number of cups received matches what was shipped.</item>
+        <item name="Grade Check">Confirm all cups are A stock, not B stock.</item>
+        <item name="Wood Type Validation">Check that the wood type matches the product that was sent or ordered.</item>
+        <item name="Matching Pairs">Verify that left and right cups and baffles are matched correctly for each unit.</item>
+    </section>
+    
+    <section id="2" name="Sanding">
+        <subsection name="Pre-Work">
+            <item name="Left/Right Pairing">Ensure cups are paired correctly as left and right.</item>
+            <item name="Grade Check">Confirm all cups are A stock.</item>
+            <item name="Pre-Sanding Validation">For robot-sanded models, confirm pre-sanding was completed.</item>
+            <item name="Grille Fit Pre-Check">Ensure grilles fit properly before sanding begins.</item>
+            <item name="Drilling Completion">Verify gimbal and jack holes are drilled out.</item>
+            <item name="Wood Match">Check that the wood matches the work order.</item>
+        </subsection>
+        <subsection name="Post-Work (Intake)">
+            <item name="Surface Smoothness">Check for uniform smoothness without gouges or unevenness.</item>
+            <item name="Shape Accuracy">Confirm shape consistency and compare against example pieces for that model.</item>
+            <item name="Edge Treatment">Ensure all edges are properly rounded or beveled as needed.</item>
+            <item name="Gimbal Fit">Confirm gimbals fit properly post-sanding.</item>
+            <item name="Grille Fit (if applicable)">Re-check that grille fit remains correct after sanding.</item>
+            <item name="Pore Filler Application">Apply and confirm pore filler use where needed.</item>
+        </subsection>
+    </section>
+    
+    <section id="3" name="Finishing">
+        <subsection name="Pre-Work">
+            <item name="Surface Smoothness">Check for uniform smoothness without gouges or unevenness.</item>
+            <item name="Shape Accuracy">Confirm shape consistency and compare against example pieces for that model.</item>
+            <item name="Edge Treatment">Ensure all edges are properly rounded or beveled as needed.</item>
+            <item name="Gimbal Fit">Confirm gimbals fit properly post-sanding.</item>
+            <item name="Grille Fit (if applicable)">Re-check that grille fit remains correct after sanding.</item>
+            <item name="Pore Filler Application">Apply and confirm pore filler use where needed.</item>
+        </subsection>
+        <subsection name="Post-Work (Intake)">
+            <item name="Slots Stained">Verify that slots are evenly and adequately stained.</item>
+            <item name="Bottom Rim Stained">Confirm that the bottom rim has received proper stain treatment.</item>
+            <item name="Buffed as Needed">Ensure final buffing has been completed where necessary.</item>
+            <item name="Finish Cleanliness">Confirm no niblets, hairs, or debris are present in the finish.</item>
+            <item name="A-Stock Confirmation">Check for any abnormalities that would disqualify the cup from being A-stock.</item>
+        </subsection>
+    </section>
+    
+    <section id="4" name="Sub-assembly: Chassis">
+        <subsection name="Pre-Work">
+            <item name="Stock Grade Verification">Confirm parts are A stock or B stock per the work order.</item>
+            <item name="Color Match">Ensure all components match the color specifications of the order.</item>
+        </subsection>
+        <subsection name="Post-Work (Intake)">
+            <item name="Component Fit">Ensure all parts align and fit snugly without force.</item>
+            <item name="Rod Installation">Confirm rods are inserted with the correct amount of force.</item>
+            <item name="Steel Band Alignment">Verify that the steel band is straight within the upright.</item>
+            <item name="Fastener Tightness">Verify all screws/bolts are torqued correctly.</item>
+            <item name="Thread Locking">Ensure screws are properly thread-locked or securely tightened.</item>
+            <item name="Screw Integrity">Check that no screws are stripped.</item>
+        </subsection>
+    </section>
+    
+    <section id="5" name="Sub-assembly: Baffle">
+        <subsection name="Pre-Work">
+            <item name="Driver Preparation">Ensure drivers are tested and labeled.</item>
+            <item name="Surface Quality">Confirm baffles are sanded and rounded properly.</item>
+            <item name="Finish Inspection">Ensure there are no sanding marks in incorrect areas.</item>
+            <item name="Hole Alignment">Check that baffle holes align properly with other components.</item>
+        </subsection>
+        <subsection name="Post-Work (Intake)">
+            <item name="Driver Seating">Confirm drivers are flush and secure in their mountings.</item>
+            <item name="Seal Integrity">Test for air-tight seal where required.</item>
+            <item name="Soldering Quality">Inspect solder joints for cleanliness and strength.</item>
+            <item name="Foam Matching">Ensure all foam is matched by weight as required.</item>
+        </subsection>
+    </section>
+    
+    <section id="6" name="Final Production">
+        <subsection name="Pre-Work">
+            <item name="Component Check">Ensure all sub-assemblies and hardware are ready and defect-free.</item>
+        </subsection>
+        <subsection name="Post-Work (Intake)">
+            <item name="Full Assembly Check">Verify all parts are installed in the correct order and orientation.</item>
+            <item name="Functional Test">Perform electrical and mechanical testing.</item>
+            <item name="Hardware Check">Confirm all external hardware is present and functional.</item>
+            <item name="Comfort Test">Inspect headband adjustment, clamp force, and padding.</item>
+        </subsection>
+    </section>
+    
+    <section id="6.5" name="Final Assembly">
+        <subsection name="Pre-Work">
+            <item name="Parts Verification">Ensure all parts match the assigned specs.</item>
+            <item name="Finish Check">Inspect the cup finish for quality.</item>
+            <item name="Grille Fit">Confirm grille fit and darken slots as needed.</item>
+            <item name="Component Grade">Ensure all parts meet the assigned quality grade.</item>
+        </subsection>
+        <subsection name="Post-Work (Intake)">
+            <item name="Set Screw Slots">Properly darkened and smooth.</item>
+            <item name="Icon Slots">Cleaned thoroughly, with no wood or debris remaining.</item>
+            <item name="Baffle Length">Does not extend past outer cup diameter.</item>
+            <item name="Steel Band Insertion">Set at 90° and correctly inserted.</item>
+            <item name="Fraying Check">No fraying present; trim any visible frays.</item>
+            <item name="Thread Securing">Use a heat gun briefly to shrink threads and secure leather ends.</item>
+            <item name="Baffle Screws">Confirm presence and correct installation.</item>
+            <item name="Gimbal Tension">Ensure even tension on both sides, with a premium feel and proper stability.</item>
+            <item name="Waxed O-Rings">Ensure no squeaking; apply guitar detailer if needed.</item>
+            <item name="Vibratite Application">Check bolts have vibratite applied; remove visible residue; confirm tightness with hex keys.</item>
+            <item name="Rod Adjustment">Perform click test for audible feedback and inspect visual congruence.</item>
+            <item name="Metal Finish">Check rods and metal components for marks, inconsistencies, and confirm symmetrical molded marks.</item>
+            <item name="Audio Test (Sonic Sweeps)">Run sweeps with JDS Labs Element amp; confirm absence of buzzes or rattles.</item>
+            <item name="Audio Test (In Phase)">Play stereo phase test and confirm accurate phase alignment.</item>
+        </subsection>
+    </section>
+    
+    <section id="7" name="Acoustic and Aesthetic QC">
+        <subsection name="Post-Work (Intake)">
+            <item name="Listening Test">Compare sound signature to a reference unit.</item>
+            <item name="Cosmetic Review">Check for blemishes, fingerprints, mismatched grain or finish.</item>
+            <item name="Measurement Test">Confirm measurements match acoustic standards.</item>
+            <item name="Listening Test Confirmation">Ensure no audible buzzes, rattles, or imperfections.</item>
+            <item name="Debris Check">Confirm headphone is free of debris.</item>
+            <item name="Headband Alignment">Verify headband is properly bent.</item>
+            <item name="Fit Test">Check headband tension for comfort and security.</item>
+            <item name="Rod Tension">Confirm rod tension is correct and consistent.</item>
+            <item name="Surface Cleanliness">Ensure no thread locker or touch-up paint is visible.</item>
+            <item name="Quality Standard">Confirm headphone meets the assigned quality standard.</item>
+            <item name="Headband Stamp">Ensure stamp is present on the headband.</item>
+            <item name="Spec Verification">Confirm all product specs are correct.</item>
+        </subsection>
+    </section>
+    
+    <section id="8" name="Shipping">
+        <item name="Cleaning">Wipe down all surfaces and polish metal and wood.</item>
+        <item name="Accessory Inclusion">Verify that all cables, cases, documentation, etc. are present.</item>
+        <item name="Packaging Inspection">Ensure all items are secured and protected for transit.</item>
+        <item name="Labeling and Tracking">Attach correct labels and confirm tracking system updates.</item>
+        <item name="Headband Bolts">Confirm secure installation and appropriate tightness.</item>
+        <item name="Finish Gimbal">Check finish on gimbals for consistency and cleanliness.</item>
+        <item name="Touchup O-Rings">Ensure O-rings are clean and free of cosmetic touch-up residue.</item>
+        <item name="Set-Screw">Confirm proper fit and darkening as required.</item>
+        <item name="Earpad Align">Ensure earpads are aligned properly.</item>
+        <item name="DUST">Check that all headphone surfaces are free of dust.</item>
+        <item name="Pre-Pack Confirmation">Confirm pre-pack checklist is complete and matches Shopify/listing records.</item>
+    </section>
+    
+    <footer>This document should be reviewed and updated periodically as product designs and production standards evolve.</footer>
+</quality_control_checklist>

@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Home, ClipboardList, Shield, Award, Clock, CheckSquare, Eye, EyeOff } from 'lucide-react'
+import { Home, ClipboardList, Shield, Award, Clock, CheckSquare, Eye, EyeOff, Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -38,16 +38,24 @@ const navigationItems = [
     href: '/worker/achievements',
     icon: Award,
   },
+  {
+    name: 'Repairs',
+    href: '/worker/repairs',
+    icon: Wrench,
+  },
 ]
 
 export function WorkerNavigation() {
   const pathname = usePathname()
   const [showAllNavigation, setShowAllNavigation] = useState(false)
 
-  // Filter navigation items - show only QC Checklist by default
+  // Filter navigation items - show QC Checklist and Repairs by default
   const visibleItems = showAllNavigation 
     ? navigationItems 
-    : navigationItems.filter(item => item.href === '/worker/qc-checklist')
+    : navigationItems.filter(item => 
+        item.href === '/worker/qc-checklist' || 
+        item.href === '/worker/repairs'
+      )
 
   return (
     <nav className="bg-white border-b border-gray-200">

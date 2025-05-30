@@ -83,10 +83,10 @@ export async function POST(
           .from('worker_stage_assignments')
           .select(`
             worker_id,
-            worker:workers(id, name, active)
+            worker:workers(id, name, is_active)
           `)
           .eq('stage', targetStage)
-          .eq('active', true)
+          .eq('is_active', true)
         
         if (workersError) {
           console.error('Error fetching available workers:', workersError)

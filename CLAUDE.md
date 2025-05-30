@@ -21,15 +21,42 @@ import { createClient } from '@/lib/supabase/server'
 const supabase = await createClient()
 const { data: { user } } = await supabase.auth.getUser() // NEVER getSession()
 
-// Always validate employee
-const { data: employee } = await supabase
-  .from('employees')
-  .select('role, active')
+// Always validate worker - CRITICAL: Use 'workers' table, NOT 'employees'
+const { data: worker } = await supabase
+  .from('workers')
+  .select('id, role, is_active, approval_status')
   .eq('auth_user_id', user.id)
   .single()
 
-if (!employee?.active) redirect('/login')
+if (!worker?.is_active || worker.approval_status !== 'approved') redirect('/unauthorized')
 ```
+
+## 🗄️ Database Schema (CRITICAL - ALWAYS CHECK THESE)
+**Worker Table**: `workers` (NOT `employees`)
+- Column: `is_active` (NOT `active`)
+- Column: `approval_status` must equal `'approved'`
+- Column: `auth_user_id` for authentication
+
+**Repair System Tables**:
+- `repair_orders` - Main repair tracking
+- `repair_issues` - Issue tracking
+- `repair_actions` - Actions taken  
+- `repair_time_logs` - Time tracking
+- `repair_photos` - Photo storage
+- `repair_knowledge_base` - Knowledge base
+- `repair_notifications` - Notifications
+
+**Key Foreign Keys**:
+- `repair_orders.assigned_to` → `workers.id`
+- `repair_orders.created_by` → `workers.id`
+- `repair_time_logs.worker_id` → `workers.id`
+
+**Repair System Status**: ✅ FULLY IMPLEMENTED
+- All 8 database tables created with RLS policies
+- Complete repair workflow (intake → assignment → work → completion)
+- Timer functionality and issue tracking
+- Located under `/worker/repairs` (accessible to all workers)
+- Manager navigation redirects to worker section
 
 ## 📊 Logging Requirements (MANDATORY)
 Every API route and important business event MUST be logged:

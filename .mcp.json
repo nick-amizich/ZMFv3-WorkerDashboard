@@ -1,0 +1,17 @@
+{
+    "mcpServers": {
+      "supabase": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@supabase/mcp-server-supabase@latest",
+          "--access-token",
+          "sbp_eefd4f2a7d7cdd157ddec9026bcdaeac747fa6ed"
+        ]
+      },
+      "shopify-dev-mcp": {
+        "command": "npx",
+        "args": ["-y", "@shopify/dev-mcp@latest"]
+      }
+    }
+  }

@@ -15,7 +15,8 @@ import {
   ChevronDown,
   Zap,
   Layout,
-  ClipboardList
+  ClipboardList,
+  Wrench
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -77,6 +78,11 @@ const navigationItems: NavItem[] = [
     name: 'Orders',
     href: '/manager/orders',
     icon: Package,
+  },
+  {
+    name: 'Repairs',
+    href: '/worker/repairs',
+    icon: Wrench,
   },
   {
     name: 'Quality',

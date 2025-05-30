@@ -54,6 +54,7 @@
     "react-hook-form": "^7.56.4",
     "recharts": "^2.15.3",
     "tailwind-merge": "^2.5.4",
+    "uuid": "^11.1.0",
     "zod": "^3.25.26"
   },
   "devDependencies": {
