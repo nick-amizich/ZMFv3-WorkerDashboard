@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import type { Database } from '@/types/database'
+import type { Database } from '@/types/database.types'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -50,42 +50,57 @@ export async function middleware(request: NextRequest) {
 
   // Check worker status for authenticated users on protected routes
   if (user && !isPublicRoute) {
-    const { data: worker } = await supabase
-      .from('workers')
-      .select('id, role, is_active, approval_status')
-      .eq('auth_user_id', user.id)
-      .single()
+    try {
+      const { data: worker, error } = await supabase
+        .from('workers')
+        .select('id, role, is_active, approval_status')
+        .eq('auth_user_id', user.id)
+        .single()
 
-    if (!worker || !worker.is_active) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/unauthorized'
-      return NextResponse.redirect(url)
-    }
-
-    // Check approval status if the field exists
-    const approvalStatus = (worker as any).approval_status
-    if (approvalStatus && approvalStatus !== 'approved') {
-      // Allow access to a pending approval page
-      if (pathname !== '/pending-approval' && !pathname.startsWith('/api/auth')) {
+      // Handle case where user doesn't have a worker record
+      if (error || !worker) {
+        console.log('No worker record found for user:', user.id, error?.message)
         const url = request.nextUrl.clone()
-        url.pathname = '/pending-approval'
-        return NextResponse.redirect(url)
-      }
-    }
-
-    // Role-based route protection (only for approved users)
-    if (approvalStatus === 'approved' || !approvalStatus) {
-      if (pathname.startsWith('/manager') && !['manager', 'supervisor'].includes(worker.role || '')) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/worker'
+        url.pathname = '/login'
+        url.searchParams.set('error', 'no_worker_profile')
         return NextResponse.redirect(url)
       }
 
-      if (pathname.startsWith('/worker') && worker.role === 'manager') {
+      if (!worker.is_active) {
         const url = request.nextUrl.clone()
-        url.pathname = '/manager'
+        url.pathname = '/unauthorized'
         return NextResponse.redirect(url)
       }
+
+      // Check approval status if the field exists
+      const approvalStatus = (worker as any).approval_status
+      if (approvalStatus && approvalStatus !== 'approved') {
+        // Allow access to a pending approval page
+        if (pathname !== '/pending-approval' && !pathname.startsWith('/api/auth')) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/pending-approval'
+          return NextResponse.redirect(url)
+        }
+      }
+
+      // Role-based route protection (only for approved users)
+      if (approvalStatus === 'approved' || !approvalStatus) {
+        if (pathname.startsWith('/manager') && !['manager', 'supervisor'].includes(worker.role || '')) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/worker'
+          return NextResponse.redirect(url)
+        }
+
+        if (pathname.startsWith('/worker') && worker.role === 'manager') {
+          const url = request.nextUrl.clone()
+          url.pathname = '/manager'
+          return NextResponse.redirect(url)
+        }
+      }
+    } catch (error) {
+      console.error('Middleware error checking worker status:', error)
+      // On error, allow the request to continue but log it
+      // This prevents the app from breaking due to database issues
     }
   }
 

@@ -15,7 +15,8 @@ import {
   ChevronDown,
   Zap,
   Layout,
-  ClipboardList
+  ClipboardList,
+  Factory
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -131,6 +132,11 @@ const navigationItems: NavItem[] = [
         description: 'Manage worker profiles, approvals, and permissions'
       }
     ]
+  },
+  {
+    name: 'Machine Shop',
+    href: '/south',
+    icon: Factory,
   },
   {
     name: 'Automation',

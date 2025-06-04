@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createShopifyClient } from './client'
-import type { Database } from '@/types/database'
+import type { Database } from '@/types/database.types'
 
 type OrderInsert = Database['public']['Tables']['orders']['Insert']
 type OrderItemInsert = Database['public']['Tables']['order_items']['Insert']

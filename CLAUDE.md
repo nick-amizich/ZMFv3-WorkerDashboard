@@ -1,5 +1,14 @@
 # ZMFv2 Development Rules
 
+<IMPORTANT>
+ALWAYS USE THE RULES IN THE .cursor FOLDER. 
+Verify that you looked at them by say "Rules Checked" in your response
+</IMPORTANT>
+
+Always use "is_active" for supabase
+
+Make sure to look at LOCAL_DEV_GUIDE.md to understand how to use our local supabase environment and handle migrations.
+
 **Project**: Headphone manufacturing company backend  
 **Stack**: Next.js 15.3.2 + Supabase + TypeScript + React 18.2.0
 

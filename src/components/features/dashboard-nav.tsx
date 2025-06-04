@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { LocationSwitcher } from '@/components/features/location-switcher'
+import { ConnectionStatus } from '@/components/features/connection-status'
 
 const navigation = [
   { name: 'Home', href: '/' },
@@ -12,6 +14,7 @@ const navigation = [
 
 export function DashboardNav() {
   const pathname = usePathname()
+  const appName = process.env.NEXT_PUBLIC_APP_NAME || 'ZMF Dashboard'
 
   return (
     <nav className="bg-white shadow-sm border-b">
@@ -19,7 +22,7 @@ export function DashboardNav() {
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">ZMF Dashboard</h1>
+              <h1 className="text-xl font-bold text-gray-900">{appName}</h1>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               {navigation.map((item) => (
@@ -37,6 +40,10 @@ export function DashboardNav() {
                 </Link>
               ))}
             </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <LocationSwitcher />
+            <ConnectionStatus />
           </div>
         </div>
       </div>

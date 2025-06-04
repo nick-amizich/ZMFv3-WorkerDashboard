@@ -232,6 +232,12 @@ class Logger {
 
   private async logToDatabase(entry: LogEntry): Promise<void> {
     try {
+      // Only log to database on server side to avoid Next.js import issues
+      if (typeof window !== 'undefined') {
+        // We're on the client side, skip database logging
+        return
+      }
+
       // Use a server-side Supabase client for logging
       const { createClient } = await import('@/lib/supabase/server')
       const supabase = await createClient()

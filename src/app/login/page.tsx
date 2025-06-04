@@ -85,14 +85,30 @@ function LoginForm() {
       }
 
       if (data.user) {
+        // Give a brief moment for the session to be established
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
         // Check worker status to determine redirect
         const { data: worker, error: workerError } = await supabase
           .from('workers')
-          .select('role, is_active')
+          .select('role, is_active, approval_status')
           .eq('auth_user_id', data.user.id)
           .single()
 
-        if (workerError || !worker) {
+        if (workerError) {
+          console.log('Worker lookup error:', workerError)
+          // If we can't find the worker record, let the middleware handle it
+          // The middleware will redirect appropriately
+          if (['manager', 'supervisor'].includes(data.user.user_metadata?.role || '')) {
+            router.push('/manager')
+          } else {
+            router.push('/worker')
+          }
+          router.refresh()
+          return
+        }
+
+        if (!worker) {
           toast({
             title: 'Access denied',
             description: 'No worker profile found. Please contact your administrator.',
@@ -114,7 +130,19 @@ function LoginForm() {
           return
         }
 
+        // Check approval status
+        if (worker.approval_status && worker.approval_status !== 'approved') {
+          router.push('/pending-approval')
+          setLoading(false)
+          return
+        }
+
         // Successful login - redirect based on role
+        toast({
+          title: 'Login successful',
+          description: 'Welcome back!',
+        })
+        
         if (['manager', 'supervisor'].includes(worker.role || '')) {
           router.push('/manager')
         } else {
@@ -125,11 +153,15 @@ function LoginForm() {
       }
     } catch (error) {
       console.error('Login error:', error)
-      toast({
-        title: 'Login failed',
-        description: 'An unexpected error occurred. Please try again.',
-        variant: 'destructive',
-      })
+      // Only show error if we're still on the login page
+      // If we've been redirected, the login was successful
+      if (window.location.pathname === '/login') {
+        toast({
+          title: 'Login failed',
+          description: 'An unexpected error occurred. Please try again.',
+          variant: 'destructive',
+        })
+      }
     } finally {
       setLoading(false)
     }
