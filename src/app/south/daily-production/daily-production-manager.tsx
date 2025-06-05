@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -27,28 +27,24 @@ import { logBusiness, logError } from '@/lib/logger-client'
 
 interface DailyProduction {
   id: string
-  production_request_id: string
+  production_request_id: string | null
   quantity_produced: number
   manufacturing_date: string
-  operator_id: string
-  machine_id: string
-  shift: 'day' | 'night' | 'weekend'
-  production_time_hours: number
-  scrap_count: number
-  notes: string | null
-  qc_status: 'pending' | 'passed' | 'failed' | 'partial'
-  created_at: string
+  completed_by: string | null
+  machine_id: string | null
+  run_time_minutes: number | null
+  setup_time_minutes: number | null
+  scrap_quantity: number | null
+  quality_notes: string | null
+  created_at: string | null
   production_request?: {
-    customer_name: string
     quantity_ordered: number
     quantity_completed: number
+    notes?: any
     part?: {
       part_name: string
       part_type: string
     }
-  }
-  operator?: {
-    name: string
   }
   machine?: {
     machine_name: string
@@ -80,12 +76,11 @@ export function DailyProductionManager() {
           .select(`
             *,
             production_request:production_requests(
-              customer_name,
               quantity_ordered,
               quantity_completed,
+              notes,
               part:parts_catalog(part_name, part_type)
             ),
-            operator:workers!daily_production_operator_id_fkey(name),
             machine:machines(machine_name)
           `)
           .eq('manufacturing_date', selectedDate)
@@ -94,6 +89,7 @@ export function DailyProductionManager() {
           .from('production_requests')
           .select(`
             *,
+            notes,
             part:parts_catalog(part_name, part_type)
           `)
           .in('status', ['pending', 'in_production'])
@@ -109,6 +105,7 @@ export function DailyProductionManager() {
       if (requestsRes.error) throw requestsRes.error
       if (machinesRes.error) throw machinesRes.error
 
+      console.log('Active requests:', requestsRes.data)
       setProductions(productionsRes.data || [])
       setActiveRequests(requestsRes.data || [])
       setMachines(machinesRes.data || [])
@@ -129,25 +126,14 @@ export function DailyProductionManager() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      const { data: worker } = await supabase
-        .from('workers')
-        .select('auth_user_id')
-        .eq('auth_user_id', user.id)
-        .single()
-
-      if (!worker) throw new Error('Worker not found')
-
       const productionData = {
         production_request_id: formData.get('production_request_id') as string,
         quantity_produced: parseInt(formData.get('quantity_produced') as string),
         manufacturing_date: formData.get('manufacturing_date') as string,
-        operator_id: worker.auth_user_id,
-        machine_id: formData.get('machine_id') as string,
-        shift: formData.get('shift') as 'day' | 'night' | 'weekend',
-        production_time_hours: parseFloat(formData.get('production_time_hours') as string),
-        scrap_count: parseInt(formData.get('scrap_count') as string) || 0,
-        notes: formData.get('notes') as string || null,
-        qc_status: 'pending' as const,
+        completed_by: user.id,
+        machine_id: null, // We don't track machines anymore
+        run_time_minutes: 60, // Default to 60 minutes for now
+        scrap_quantity: parseInt(formData.get('scrap_count') as string) || 0,
       }
 
       // Insert production record
@@ -199,55 +185,18 @@ export function DailyProductionManager() {
     }
   }
 
-  async function updateQCStatus(id: string, status: string) {
-    try {
-      const { error } = await supabase
-        .from('daily_production')
-        .update({ qc_status: status })
-        .eq('id', id)
-
-      if (error) throw error
-
-      toast({
-        title: 'QC status updated',
-        description: `Status changed to ${status}`,
-      })
-
-      loadData()
-    } catch (error) {
-      logError(error as Error, 'DAILY_PRODUCTION', { action: 'update_qc' })
-      toast({
-        title: 'Error updating QC status',
-        description: 'Failed to update quality control status',
-        variant: 'destructive',
-      })
-    }
-  }
 
   // Calculate daily metrics
   const dailyMetrics = {
     totalProduced: productions.reduce((sum, p) => sum + p.quantity_produced, 0),
-    totalScrap: productions.reduce((sum, p) => sum + p.scrap_count, 0),
-    totalHours: productions.reduce((sum, p) => sum + p.production_time_hours, 0),
+    totalScrap: productions.reduce((sum, p) => sum + (p.scrap_quantity || 0), 0),
+    totalMinutes: productions.reduce((sum, p) => sum + (p.run_time_minutes || 0), 0),
     efficiency: 0,
-    qcPassRate: 0,
   }
 
   if (dailyMetrics.totalProduced > 0) {
     dailyMetrics.efficiency = ((dailyMetrics.totalProduced - dailyMetrics.totalScrap) / dailyMetrics.totalProduced) * 100
   }
-
-  const passedCount = productions.filter(p => p.qc_status === 'passed').length
-  if (productions.length > 0) {
-    dailyMetrics.qcPassRate = (passedCount / productions.length) * 100
-  }
-
-  const qcStatusColors = {
-    pending: 'default',
-    passed: 'success',
-    failed: 'destructive',
-    partial: 'warning',
-  } as const
 
   return (
     <div className="space-y-6">
@@ -269,6 +218,9 @@ export function DailyProductionManager() {
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>Log Daily Production</DialogTitle>
+                  <DialogDescription>
+                    Record production output, scrap, and other metrics for the selected date
+                  </DialogDescription>
                 </DialogHeader>
                 <ProductionForm 
                   requests={activeRequests}
@@ -295,7 +247,7 @@ export function DailyProductionManager() {
       </Card>
 
       {/* Daily Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -319,11 +271,11 @@ export function DailyProductionManager() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Hours
+              Total Time
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{dailyMetrics.totalHours.toFixed(1)}</div>
+            <div className="text-2xl font-bold">{Math.round(dailyMetrics.totalMinutes / 60)}h</div>
           </CardContent>
         </Card>
         <Card>
@@ -334,16 +286,6 @@ export function DailyProductionManager() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{dailyMetrics.efficiency.toFixed(1)}%</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              QC Pass Rate
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{dailyMetrics.qcPassRate.toFixed(1)}%</div>
           </CardContent>
         </Card>
       </div>
@@ -370,10 +312,21 @@ export function DailyProductionManager() {
                       <div>
                         <div className="text-sm text-muted-foreground">Part</div>
                         <div className="font-medium">
-                          {production.production_request?.part?.part_name || 'Unknown'}
+                          {(() => {
+                            const request = production.production_request
+                            if (!request) return 'Unknown'
+                            const notes = request.notes ? (typeof request.notes === 'string' ? JSON.parse(request.notes) : request.notes) : {}
+                            const displayName = request.part?.part_name || notes.product_name || 'Unknown'
+                            return displayName
+                          })()}
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {production.production_request?.customer_name}
+                          {(() => {
+                            const request = production.production_request
+                            if (!request) return ''
+                            const notes = request.notes ? (typeof request.notes === 'string' ? JSON.parse(request.notes) : request.notes) : {}
+                            return notes.material || ''
+                          })()}
                         </div>
                       </div>
                       <div>
@@ -382,51 +335,27 @@ export function DailyProductionManager() {
                           {production.quantity_produced} units
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {production.scrap_count > 0 && (
-                            <span className="text-red-600">Scrap: {production.scrap_count}</span>
+                          {production.scrap_quantity && production.scrap_quantity > 0 && (
+                            <span className="text-red-600">Scrap: {production.scrap_quantity}</span>
                           )}
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm text-muted-foreground">Details</div>
+                        <div className="text-sm text-muted-foreground">Time</div>
                         <div className="text-sm space-y-1">
                           <div className="flex items-center gap-1">
-                            <User className="h-3 w-3" />
-                            {production.operator?.name || 'Unknown'}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Wrench className="h-3 w-3" />
-                            {production.machine?.machine_name || 'Unknown'}
-                          </div>
-                          <div className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {production.production_time_hours}h ({production.shift})
+                            {production.run_time_minutes ? `${production.run_time_minutes} min` : 'N/A'}
                           </div>
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm text-muted-foreground mb-2">QC Status</div>
-                        <Select 
-                          value={production.qc_status} 
-                          onValueChange={(value) => updateQCStatus(production.id, value)}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pending">Pending</SelectItem>
-                            <SelectItem value="passed">Passed</SelectItem>
-                            <SelectItem value="failed">Failed</SelectItem>
-                            <SelectItem value="partial">Partial</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div className="text-sm text-muted-foreground">Date</div>
+                        <div className="text-sm">
+                          {new Date(production.manufacturing_date).toLocaleDateString()}
+                        </div>
                       </div>
                     </div>
-                    {production.notes && (
-                      <div className="mt-4 text-sm text-muted-foreground">
-                        <span className="font-medium">Notes:</span> {production.notes}
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -452,37 +381,89 @@ function ProductionForm({
   onCancel: () => void
 }) {
   const [selectedRequest, setSelectedRequest] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isOpen, setIsOpen] = useState(false)
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
+    if (selectedRequest) {
+      formData.set('production_request_id', selectedRequest.id)
+    }
     onSubmit(formData)
+  }
+
+  // Filter requests based on search query
+  const filteredRequests = requests.filter(request => {
+    const notes = request.notes ? (typeof request.notes === 'string' ? JSON.parse(request.notes) : request.notes) : {}
+    let displayName = request.part?.part_name || notes.product_name || 'Unknown Product'
+    
+    // Clean up left/right references
+    displayName = displayName
+      .replace(/\s*-?\s*lefts?\s*$/i, '')
+      .replace(/\s*-?\s*rights?\s*$/i, '')
+      .replace(/\s*\(?\s*lefts?\s*\)?\s*$/i, '')
+      .replace(/\s*\(?\s*rights?\s*\)?\s*$/i, '')
+      .trim()
+    
+    const material = notes.material || ''
+    const searchString = `${displayName} ${material}`.toLowerCase()
+    
+    return searchString.includes(searchQuery.toLowerCase())
+  })
+
+  const getDisplayName = (request: any) => {
+    const notes = request.notes ? (typeof request.notes === 'string' ? JSON.parse(request.notes) : request.notes) : {}
+    let displayName = request.part?.part_name || notes.product_name || 'Unknown Product'
+    
+    // Clean up left/right references
+    displayName = displayName
+      .replace(/\s*-?\s*lefts?\s*$/i, '')
+      .replace(/\s*-?\s*rights?\s*$/i, '')
+      .replace(/\s*\(?\s*lefts?\s*\)?\s*$/i, '')
+      .replace(/\s*\(?\s*rights?\s*\)?\s*$/i, '')
+      .trim()
+    
+    const material = notes.material || ''
+    return `${displayName}${material ? ` - ${material}` : ''} (${request.quantity_completed || 0}/${request.quantity_ordered})`
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
+      <div className="space-y-2">
         <Label htmlFor="production_request_id">Production Request</Label>
-        <Select 
-          name="production_request_id" 
-          required
-          onValueChange={(value) => {
-            const request = requests.find(r => r.id === value)
-            setSelectedRequest(request)
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select a production request" />
-          </SelectTrigger>
-          <SelectContent>
-            {requests.map(request => (
-              <SelectItem key={request.id} value={request.id}>
-                {request.part?.part_name} - {request.customer_name} 
-                ({request.quantity_completed || 0}/{request.quantity_ordered})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="relative">
+          <Input
+            placeholder="Type to search for a production request..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value)
+              setIsOpen(true)
+            }}
+            onFocus={() => setIsOpen(true)}
+            onBlur={() => {
+              // Delay to allow click on dropdown items
+              setTimeout(() => setIsOpen(false), 200)
+            }}
+          />
+          {isOpen && filteredRequests.length > 0 && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+              {filteredRequests.map(request => (
+                <div
+                  key={request.id}
+                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                  onClick={() => {
+                    setSelectedRequest(request)
+                    setSearchQuery(getDisplayName(request))
+                    setIsOpen(false)
+                  }}
+                >
+                  {getDisplayName(request)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         {selectedRequest && (
           <div className="mt-2 p-3 bg-gray-50 rounded-md text-sm">
             <div>Remaining: {selectedRequest.quantity_ordered - (selectedRequest.quantity_completed || 0)} units</div>
@@ -515,70 +496,19 @@ function ProductionForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="machine_id">Machine</Label>
-          <Select name="machine_id" required>
-            <SelectTrigger>
-              <SelectValue placeholder="Select machine" />
-            </SelectTrigger>
-            <SelectContent>
-              {machines.map(machine => (
-                <SelectItem key={machine.id} value={machine.id}>
-                  {machine.machine_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="shift">Shift</Label>
-          <Select name="shift" defaultValue="day">
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="day">Day</SelectItem>
-              <SelectItem value="night">Night</SelectItem>
-              <SelectItem value="weekend">Weekend</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="manufacturing_date">Manufacturing Date</Label>
-          <Input
-            id="manufacturing_date"
-            name="manufacturing_date"
-            type="date"
-            defaultValue={defaultDate}
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="production_time_hours">Production Hours</Label>
-          <Input
-            id="production_time_hours"
-            name="production_time_hours"
-            type="number"
-            step="0.5"
-            min="0.5"
-            required
-          />
-        </div>
-      </div>
 
       <div>
-        <Label htmlFor="notes">Notes</Label>
-        <textarea
-          id="notes"
-          name="notes"
-          className="w-full min-h-[80px] px-3 py-2 text-sm rounded-md border border-input bg-background"
-          placeholder="Any notes about this production run..."
+        <Label htmlFor="manufacturing_date">Manufacturing Date</Label>
+        <Input
+          id="manufacturing_date"
+          name="manufacturing_date"
+          type="date"
+          defaultValue={defaultDate}
+          required
         />
       </div>
+      
+
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>

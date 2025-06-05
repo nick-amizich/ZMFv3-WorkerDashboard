@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,7 +28,8 @@ import {
   Zap,
   ArrowRight,
   AlertCircle,
-  Timer
+  Timer,
+  Plus
 } from 'lucide-react'
 import { logBusiness, logError } from '@/lib/logger-client'
 
@@ -125,7 +126,6 @@ export function ProductionScheduler() {
         supabase
           .from('workers')
           .select('*')
-          .eq('primary_location', 'south')
           .eq('is_active', true)
           .order('name'),
         supabase
@@ -152,12 +152,26 @@ export function ProductionScheduler() {
       if (machinesRes.error) throw machinesRes.error
       if (operatorsRes.error) throw operatorsRes.error
 
-      // Generate scheduled jobs if they don't exist
-      const jobs = jobsRes.data || generateScheduledJobs(
-        requestsRes.data || [],
-        machinesRes.data || [],
-        operatorsRes.data || []
-      )
+      // Handle production_schedule error gracefully - table might be empty or have issues
+      let jobs: ScheduledJob[] = []
+      if (jobsRes.error) {
+        console.warn('Failed to load existing schedule, generating new:', jobsRes.error)
+        // Generate new schedule if we can't load existing one
+        jobs = generateScheduledJobs(
+          requestsRes.data || [],
+          machinesRes.data || [],
+          operatorsRes.data || []
+        )
+      } else {
+        // Use existing jobs or generate if none exist
+        jobs = jobsRes.data && jobsRes.data.length > 0 
+          ? jobsRes.data 
+          : generateScheduledJobs(
+              requestsRes.data || [],
+              machinesRes.data || [],
+              operatorsRes.data || []
+            )
+      }
 
       // Detect conflicts
       const detectedConflicts = detectScheduleConflicts(jobs)
@@ -278,6 +292,9 @@ export function ProductionScheduler() {
   }
 
   function canMachineProducePart(machine: any, part: any): boolean {
+    // Handle null/undefined part
+    if (!part) return true
+    
     // Simplified logic - in reality would check machine capabilities
     if (part.part_type === 'cup' && machine.machine_type.includes('Mill')) return true
     if (part.part_type === 'baffle' && machine.machine_type.includes('Lathe')) return true
@@ -285,11 +302,20 @@ export function ProductionScheduler() {
   }
 
   function estimateSetupTime(part: any): number {
+    // Handle null/undefined part
+    if (!part || !part.part_type) return 20
+    
     // Simplified estimation
     return part.part_type === 'cup' ? 30 : 20
   }
 
   function estimateRunTime(part: any, quantity: number): number {
+    // Handle null/undefined part
+    if (!part || !part.part_type) {
+      const defaultTimePerUnit = 10
+      return defaultTimePerUnit * quantity
+    }
+    
     // Simplified estimation
     const timePerUnit = part.part_type === 'cup' ? 15 : 10
     return timePerUnit * quantity
@@ -612,6 +638,9 @@ export function ProductionScheduler() {
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
                     <DialogTitle>Schedule Production Job</DialogTitle>
+                    <DialogDescription>
+                      Schedule a new production job and assign it to available machines and operators
+                    </DialogDescription>
                   </DialogHeader>
                   <ScheduleJobForm
                     requests={productionRequests.filter(r => 

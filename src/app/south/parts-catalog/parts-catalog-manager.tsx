@@ -11,27 +11,50 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Edit, Package, FileText, AlertCircle, Check } from 'lucide-react'
+import { Plus, Edit, Package, FileText, AlertCircle, Check, Cpu, Wrench, Calendar, BarChart3 } from 'lucide-react'
 import { logBusiness, logError } from '@/lib/logger-client'
 
 interface Part {
   id: string
   part_name: string
-  part_type: 'cup' | 'baffle'
-  model_name: string
-  has_left_right: boolean
-  part_od: number | null
-  min_stock_height: number | null
-  max_stock_height: number | null
-  min_stock_length_width: number | null
-  max_stock_length_width: number | null
-  status: 'active' | 'deprecated' | 'development'
-  master_drawing_url: string | null
-  qc_drawing_url: string | null
-  barcode: string | null
-  notes: string | null
+  part_type: 'cup' | 'baffle' | 'driver_mount' | 'connector' | 'other'
+  species?: string
+  specifications?: any
+  material_cost?: number
+  estimated_labor_hours?: number
+  is_active: boolean
   created_at: string
   updated_at: string
+}
+
+interface PartSpecifications {
+  part_od?: string
+  part_id?: string
+  cnc_part_1?: string
+  cnc_part_2?: string
+  work_offset_part_1?: string
+  work_offset_part_2?: string
+  jaws_part_1?: string
+  jaws_part_2?: string
+  hsm_work_offset_number_part_1?: string
+  hsm_work_offset_number_part_2?: string
+  has_left_and_right?: string
+  min_stock_height?: string
+  max_stock_height?: string
+  x_axis_offset_part_1?: string
+  y_axis_offset_part_1?: string
+  z_axis_offset_part_1?: string
+  x_axis_offset_part_2?: string
+  y_axis_offset_part_2?: string
+  z_axis_offset_part_2?: string
+  machining_qc?: string
+  part_status?: string
+  date_last_validated?: string
+  part_barcode?: string
+  master_drawing?: string
+  qc_drawing?: string
+  d1?: string
+  d1_tolerance_mm?: string
 }
 
 export function PartsCatalogManager() {
@@ -40,8 +63,8 @@ export function PartsCatalogManager() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingPart, setEditingPart] = useState<Part | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterType, setFilterType] = useState<'all' | 'cup' | 'baffle'>('all')
-  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'deprecated' | 'development'>('all')
+  const [filterType, setFilterType] = useState<string>('all')
+  const [filterStatus, setFilterStatus] = useState<string>('all')
   const { toast } = useToast()
   const supabase = createClient()
 
@@ -72,21 +95,42 @@ export function PartsCatalogManager() {
 
   async function savePart(formData: FormData) {
     try {
+      const specifications: PartSpecifications = {
+        part_od: formData.get('part_od') as string || undefined,
+        part_id: formData.get('part_id') as string || undefined,
+        cnc_part_1: formData.get('cnc_part_1') as string || undefined,
+        cnc_part_2: formData.get('cnc_part_2') as string || undefined,
+        work_offset_part_1: formData.get('work_offset_part_1') as string || undefined,
+        work_offset_part_2: formData.get('work_offset_part_2') as string || undefined,
+        jaws_part_1: formData.get('jaws_part_1') as string || undefined,
+        jaws_part_2: formData.get('jaws_part_2') as string || undefined,
+        hsm_work_offset_number_part_1: formData.get('hsm_work_offset_number_part_1') as string || undefined,
+        hsm_work_offset_number_part_2: formData.get('hsm_work_offset_number_part_2') as string || undefined,
+        has_left_and_right: formData.get('has_left_and_right') as string || undefined,
+        min_stock_height: formData.get('min_stock_height') as string || undefined,
+        max_stock_height: formData.get('max_stock_height') as string || undefined,
+        x_axis_offset_part_1: formData.get('x_axis_offset_part_1') as string || undefined,
+        y_axis_offset_part_1: formData.get('y_axis_offset_part_1') as string || undefined,
+        z_axis_offset_part_1: formData.get('z_axis_offset_part_1') as string || undefined,
+        x_axis_offset_part_2: formData.get('x_axis_offset_part_2') as string || undefined,
+        y_axis_offset_part_2: formData.get('y_axis_offset_part_2') as string || undefined,
+        z_axis_offset_part_2: formData.get('z_axis_offset_part_2') as string || undefined,
+        machining_qc: formData.get('machining_qc') as string || undefined,
+        part_status: formData.get('part_status') as string || undefined,
+        date_last_validated: formData.get('date_last_validated') as string || undefined,
+        part_barcode: formData.get('part_barcode') as string || undefined,
+        master_drawing: formData.get('master_drawing') as string || undefined,
+        qc_drawing: formData.get('qc_drawing') as string || undefined,
+      }
+
       const partData = {
         part_name: formData.get('part_name') as string,
-        part_type: formData.get('part_type') as 'cup' | 'baffle',
-        model_name: formData.get('model_name') as string,
-        has_left_right: formData.get('has_left_right') === 'true',
-        part_od: formData.get('part_od') ? parseFloat(formData.get('part_od') as string) : null,
-        min_stock_height: formData.get('min_stock_height') ? parseFloat(formData.get('min_stock_height') as string) : null,
-        max_stock_height: formData.get('max_stock_height') ? parseFloat(formData.get('max_stock_height') as string) : null,
-        min_stock_length_width: formData.get('min_stock_length_width') ? parseFloat(formData.get('min_stock_length_width') as string) : null,
-        max_stock_length_width: formData.get('max_stock_length_width') ? parseFloat(formData.get('max_stock_length_width') as string) : null,
-        status: formData.get('status') as 'active' | 'deprecated' | 'development',
-        master_drawing_url: formData.get('master_drawing_url') as string || null,
-        qc_drawing_url: formData.get('qc_drawing_url') as string || null,
-        barcode: formData.get('barcode') as string || null,
-        notes: formData.get('notes') as string || null,
+        part_type: formData.get('part_type') as string,
+        species: formData.get('species') as string || null,
+        specifications,
+        material_cost: formData.get('material_cost') ? parseFloat(formData.get('material_cost') as string) : null,
+        estimated_labor_hours: formData.get('estimated_labor_hours') ? parseFloat(formData.get('estimated_labor_hours') as string) : null,
+        is_active: formData.get('is_active') === 'true',
       }
 
       if (editingPart) {
@@ -139,9 +183,14 @@ export function PartsCatalogManager() {
 
   const filteredParts = parts.filter(part => {
     const matchesSearch = part.part_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         part.model_name.toLowerCase().includes(searchQuery.toLowerCase())
+                         part.species?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         part.specifications?.part_barcode?.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesType = filterType === 'all' || part.part_type === filterType
-    const matchesStatus = filterStatus === 'all' || part.status === filterStatus
+    const matchesStatus = filterStatus === 'all' || 
+                         (filterStatus === 'active' && part.is_active) ||
+                         (filterStatus === 'inactive' && !part.is_active) ||
+                         (filterStatus === 'make_it' && part.specifications?.part_status === 'Make it!') ||
+                         (filterStatus === 'one_moment' && part.specifications?.part_status === 'One Moment...')
     return matchesSearch && matchesType && matchesStatus
   })
 
@@ -157,14 +206,14 @@ export function PartsCatalogManager() {
             <div>
               <Label>Search</Label>
               <Input
-                placeholder="Search parts..."
+                placeholder="Search parts, species, barcode..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             <div>
               <Label>Type</Label>
-              <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+              <Select value={filterType} onValueChange={setFilterType}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -172,20 +221,24 @@ export function PartsCatalogManager() {
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="cup">Cup</SelectItem>
                   <SelectItem value="baffle">Baffle</SelectItem>
+                  <SelectItem value="driver_mount">Driver Mount</SelectItem>
+                  <SelectItem value="connector">Connector</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
               <Label>Status</Label>
-              <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="deprecated">Deprecated</SelectItem>
-                  <SelectItem value="development">Development</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="make_it">Make It!</SelectItem>
+                  <SelectItem value="one_moment">One Moment...</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -197,7 +250,7 @@ export function PartsCatalogManager() {
                     Add Part
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>
                       {editingPart ? 'Edit Part' : 'Add New Part'}
@@ -244,19 +297,37 @@ export function PartsCatalogManager() {
 }
 
 function PartCard({ part, onEdit }: { part: Part; onEdit: () => void }) {
-  const statusColors = {
-    active: 'default',
-    deprecated: 'destructive',
-    development: 'secondary',
-  } as const
+  const specs = part.specifications || {}
+  
+  const getStatusColor = () => {
+    if (!part.is_active) return 'secondary'
+    if (specs.part_status === 'Make it!') return 'default'
+    if (specs.part_status === 'One Moment...') return 'secondary'
+    return 'outline'
+  }
+
+  const getTypeIcon = () => {
+    switch (part.part_type) {
+      case 'cup': return Package
+      case 'baffle': return BarChart3
+      default: return Wrench
+    }
+  }
+
+  const TypeIcon = getTypeIcon()
 
   return (
-    <Card>
+    <Card className="hover:shadow-lg transition-shadow">
       <CardHeader>
         <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="text-lg">{part.part_name}</CardTitle>
-            <CardDescription>{part.model_name}</CardDescription>
+          <div className="space-y-1">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <TypeIcon className="h-4 w-4" />
+              {part.part_name}
+            </CardTitle>
+            {part.species && (
+              <CardDescription>{part.species}</CardDescription>
+            )}
           </div>
           <Button variant="ghost" size="icon" onClick={onEdit}>
             <Edit className="h-4 w-4" />
@@ -264,59 +335,98 @@ function PartCard({ part, onEdit }: { part: Part; onEdit: () => void }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex gap-2">
-          <Badge variant={part.part_type === 'cup' ? 'default' : 'secondary'}>
-            <Package className="h-3 w-3 mr-1" />
+        <div className="flex flex-wrap gap-2">
+          <Badge variant={getStatusColor()}>
+            {specs.part_status || (part.is_active ? 'Active' : 'Inactive')}
+          </Badge>
+          <Badge variant="outline">
             {part.part_type}
           </Badge>
-          <Badge variant={statusColors[part.status]}>
-            {part.status}
-          </Badge>
-          {part.has_left_right && (
+          {specs.has_left_and_right === 'Yes, Both' && (
             <Badge variant="outline">L/R</Badge>
           )}
+          {specs.date_last_validated && (
+            <Badge variant="secondary" className="text-xs">
+              <Calendar className="h-3 w-3 mr-1" />
+              {new Date(specs.date_last_validated).toLocaleDateString()}
+            </Badge>
+          )}
         </div>
 
+        {/* Dimensions */}
         <div className="grid grid-cols-2 gap-2 text-sm">
-          {part.part_od && (
+          {specs.part_od && (
             <div>
-              <span className="text-muted-foreground">OD:</span> {part.part_od}mm
+              <span className="text-muted-foreground">OD:</span> {specs.part_od}
             </div>
           )}
-          {part.min_stock_height && (
+          {specs.part_id && (
             <div>
-              <span className="text-muted-foreground">Min Height:</span> {part.min_stock_height}mm
+              <span className="text-muted-foreground">ID:</span> {specs.part_id}
             </div>
           )}
-          {part.max_stock_height && (
+          {specs.min_stock_height && (
             <div>
-              <span className="text-muted-foreground">Max Height:</span> {part.max_stock_height}mm
+              <span className="text-muted-foreground">Min Height:</span> {specs.min_stock_height}
+            </div>
+          )}
+          {specs.max_stock_height && (
+            <div>
+              <span className="text-muted-foreground">Max Height:</span> {specs.max_stock_height}
             </div>
           )}
         </div>
 
-        <div className="flex gap-2">
-          {part.master_drawing_url && (
-            <a 
-              href={part.master_drawing_url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+        {/* CNC Info */}
+        {(specs.cnc_part_1 || specs.cnc_part_2) && (
+          <div className="space-y-1 text-sm border-t pt-2">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Cpu className="h-3 w-3" />
+              CNC Programs
+            </div>
+            {specs.cnc_part_1 && (
+              <div className="pl-5">
+                Part 1: {specs.cnc_part_1} ({specs.work_offset_part_1})
+              </div>
+            )}
+            {specs.cnc_part_2 && (
+              <div className="pl-5">
+                Part 2: {specs.cnc_part_2} ({specs.work_offset_part_2})
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Barcode */}
+        {specs.part_barcode && (
+          <div className="text-xs font-mono bg-gray-100 p-1 rounded">
+            {specs.part_barcode}
+          </div>
+        )}
+
+        {/* Drawings */}
+        <div className="flex gap-2 pt-2 border-t">
+          {specs.master_drawing && (
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="text-xs"
+              onClick={() => window.open(specs.master_drawing, '_blank')}
             >
-              <FileText className="h-3 w-3" />
-              Master Drawing
-            </a>
+              <FileText className="h-3 w-3 mr-1" />
+              Master
+            </Button>
           )}
-          {part.qc_drawing_url && (
-            <a 
-              href={part.qc_drawing_url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+          {specs.qc_drawing && (
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="text-xs"
+              onClick={() => window.open(specs.qc_drawing, '_blank')}
             >
-              <FileText className="h-3 w-3" />
-              QC Drawing
-            </a>
+              <FileText className="h-3 w-3 mr-1" />
+              QC
+            </Button>
           )}
         </div>
       </CardContent>
@@ -339,12 +449,15 @@ function PartForm({
     onSubmit(formData)
   }
 
+  const specs = part?.specifications || {}
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <Tabs defaultValue="basic" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="basic">Basic Info</TabsTrigger>
           <TabsTrigger value="dimensions">Dimensions</TabsTrigger>
+          <TabsTrigger value="cnc">CNC Settings</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
@@ -360,18 +473,6 @@ function PartForm({
               />
             </div>
             <div>
-              <Label htmlFor="model_name">Model Name</Label>
-              <Input
-                id="model_name"
-                name="model_name"
-                defaultValue={part?.model_name}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
               <Label htmlFor="part_type">Part Type</Label>
               <Select name="part_type" defaultValue={part?.part_type || 'cup'}>
                 <SelectTrigger>
@@ -380,143 +481,333 @@ function PartForm({
                 <SelectContent>
                   <SelectItem value="cup">Cup</SelectItem>
                   <SelectItem value="baffle">Baffle</SelectItem>
+                  <SelectItem value="driver_mount">Driver Mount</SelectItem>
+                  <SelectItem value="connector">Connector</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="status">Status</Label>
-              <Select name="status" defaultValue={part?.status || 'active'}>
+              <Label htmlFor="species">Wood Species/Material</Label>
+              <Input
+                id="species"
+                name="species"
+                defaultValue={part?.species || ''}
+              />
+            </div>
+            <div>
+              <Label htmlFor="part_status">Part Status</Label>
+              <Select name="part_status" defaultValue={specs.part_status || 'Make it!'}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="deprecated">Deprecated</SelectItem>
-                  <SelectItem value="development">Development</SelectItem>
+                  <SelectItem value="Make it!">Make it!</SelectItem>
+                  <SelectItem value="One Moment...">One Moment...</SelectItem>
+                  <SelectItem value="No Idea">No Idea</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <Label htmlFor="has_left_right" className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="has_left_right"
-                name="has_left_right"
-                value="true"
-                defaultChecked={part?.has_left_right}
-                className="rounded border-gray-300"
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="has_left_and_right">Has Left and Right?</Label>
+              <Select name="has_left_and_right" defaultValue={specs.has_left_and_right || 'No'}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Yes, Both">Yes, Both</SelectItem>
+                  <SelectItem value="No">No</SelectItem>
+                  <SelectItem value="No Idea">No Idea</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="material_cost">Material Cost ($)</Label>
+              <Input
+                id="material_cost"
+                name="material_cost"
+                type="number"
+                step="0.01"
+                defaultValue={part?.material_cost || ''}
               />
-              Has Left/Right Variants
-            </Label>
+            </div>
+            <div>
+              <Label htmlFor="estimated_labor_hours">Est. Labor Hours</Label>
+              <Input
+                id="estimated_labor_hours"
+                name="estimated_labor_hours"
+                type="number"
+                step="0.1"
+                defaultValue={part?.estimated_labor_hours || ''}
+              />
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="barcode">Barcode</Label>
-            <Input
-              id="barcode"
-              name="barcode"
-              defaultValue={part?.barcode || ''}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="part_barcode">Barcode</Label>
+              <Input
+                id="part_barcode"
+                name="part_barcode"
+                defaultValue={specs.part_barcode || ''}
+              />
+            </div>
+            <div>
+              <Label htmlFor="date_last_validated">Date Last Validated</Label>
+              <Input
+                id="date_last_validated"
+                name="date_last_validated"
+                type="date"
+                defaultValue={specs.date_last_validated || ''}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <Label htmlFor="is_active" className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="is_active"
+                name="is_active"
+                value="true"
+                defaultChecked={part?.is_active ?? true}
+                className="rounded border-gray-300"
+              />
+              Part is Active
+            </Label>
           </div>
         </TabsContent>
 
         <TabsContent value="dimensions" className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="part_od">Part OD (mm)</Label>
+              <Label htmlFor="part_od">Part OD</Label>
               <Input
                 id="part_od"
                 name="part_od"
-                type="number"
-                step="0.001"
-                defaultValue={part?.part_od || ''}
+                defaultValue={specs.part_od || ''}
+              />
+            </div>
+            <div>
+              <Label htmlFor="part_id">Part ID</Label>
+              <Input
+                id="part_id"
+                name="part_id"
+                defaultValue={specs.part_id || ''}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>Stock Height Range (mm)</Label>
+            <Label>Stock Height Range</Label>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Input
                   id="min_stock_height"
                   name="min_stock_height"
-                  type="number"
-                  step="0.001"
                   placeholder="Minimum"
-                  defaultValue={part?.min_stock_height || ''}
+                  defaultValue={specs.min_stock_height || ''}
                 />
               </div>
               <div>
                 <Input
                   id="max_stock_height"
                   name="max_stock_height"
-                  type="number"
-                  step="0.001"
                   placeholder="Maximum"
-                  defaultValue={part?.max_stock_height || ''}
+                  defaultValue={specs.max_stock_height || ''}
                 />
               </div>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Stock Length/Width Range (mm)</Label>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="d1">D1 Dimension</Label>
+              <Input
+                id="d1"
+                name="d1"
+                defaultValue={specs.d1 || ''}
+              />
+            </div>
+            <div>
+              <Label htmlFor="d1_tolerance_mm">D1 Tolerance (mm)</Label>
+              <Input
+                id="d1_tolerance_mm"
+                name="d1_tolerance_mm"
+                defaultValue={specs.d1_tolerance_mm || ''}
+              />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="cnc" className="space-y-4">
+          <div className="space-y-4 border rounded-lg p-4">
+            <h3 className="font-medium">Part 1 Settings</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
+                <Label htmlFor="cnc_part_1">CNC Program</Label>
                 <Input
-                  id="min_stock_length_width"
-                  name="min_stock_length_width"
-                  type="number"
-                  step="0.001"
-                  placeholder="Minimum"
-                  defaultValue={part?.min_stock_length_width || ''}
+                  id="cnc_part_1"
+                  name="cnc_part_1"
+                  defaultValue={specs.cnc_part_1 || ''}
                 />
               </div>
               <div>
+                <Label htmlFor="work_offset_part_1">Work Offset</Label>
                 <Input
-                  id="max_stock_length_width"
-                  name="max_stock_length_width"
-                  type="number"
-                  step="0.001"
-                  placeholder="Maximum"
-                  defaultValue={part?.max_stock_length_width || ''}
+                  id="work_offset_part_1"
+                  name="work_offset_part_1"
+                  defaultValue={specs.work_offset_part_1 || ''}
                 />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="jaws_part_1">Jaws</Label>
+                <Input
+                  id="jaws_part_1"
+                  name="jaws_part_1"
+                  defaultValue={specs.jaws_part_1 || ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="hsm_work_offset_number_part_1">HSM Work Offset #</Label>
+                <Input
+                  id="hsm_work_offset_number_part_1"
+                  name="hsm_work_offset_number_part_1"
+                  defaultValue={specs.hsm_work_offset_number_part_1 || ''}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="x_axis_offset_part_1">X Axis Offset</Label>
+                <Input
+                  id="x_axis_offset_part_1"
+                  name="x_axis_offset_part_1"
+                  defaultValue={specs.x_axis_offset_part_1 || ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="y_axis_offset_part_1">Y Axis Offset</Label>
+                <Input
+                  id="y_axis_offset_part_1"
+                  name="y_axis_offset_part_1"
+                  defaultValue={specs.y_axis_offset_part_1 || ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="z_axis_offset_part_1">Z Axis Offset</Label>
+                <Input
+                  id="z_axis_offset_part_1"
+                  name="z_axis_offset_part_1"
+                  defaultValue={specs.z_axis_offset_part_1 || ''}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4 border rounded-lg p-4">
+            <h3 className="font-medium">Part 2 Settings</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="cnc_part_2">CNC Program</Label>
+                <Input
+                  id="cnc_part_2"
+                  name="cnc_part_2"
+                  defaultValue={specs.cnc_part_2 || ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="work_offset_part_2">Work Offset</Label>
+                <Input
+                  id="work_offset_part_2"
+                  name="work_offset_part_2"
+                  defaultValue={specs.work_offset_part_2 || ''}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="jaws_part_2">Jaws</Label>
+                <Input
+                  id="jaws_part_2"
+                  name="jaws_part_2"
+                  defaultValue={specs.jaws_part_2 || ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="hsm_work_offset_number_part_2">HSM Work Offset #</Label>
+                <Input
+                  id="hsm_work_offset_number_part_2"
+                  name="hsm_work_offset_number_part_2"
+                  defaultValue={specs.hsm_work_offset_number_part_2 || ''}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="x_axis_offset_part_2">X Axis Offset</Label>
+                <Input
+                  id="x_axis_offset_part_2"
+                  name="x_axis_offset_part_2"
+                  defaultValue={specs.x_axis_offset_part_2 || ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="y_axis_offset_part_2">Y Axis Offset</Label>
+                <Input
+                  id="y_axis_offset_part_2"
+                  name="y_axis_offset_part_2"
+                  defaultValue={specs.y_axis_offset_part_2 || ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="z_axis_offset_part_2">Z Axis Offset</Label>
+                <Input
+                  id="z_axis_offset_part_2"
+                  name="z_axis_offset_part_2"
+                  defaultValue={specs.z_axis_offset_part_2 || ''}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="machining_qc">Machining QC Notes</Label>
+            <textarea
+              id="machining_qc"
+              name="machining_qc"
+              className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md border border-input bg-background"
+              defaultValue={specs.machining_qc || ''}
+            />
           </div>
         </TabsContent>
 
         <TabsContent value="documents" className="space-y-4">
           <div>
-            <Label htmlFor="master_drawing_url">Master Drawing URL</Label>
+            <Label htmlFor="master_drawing">Master Drawing URL</Label>
             <Input
-              id="master_drawing_url"
-              name="master_drawing_url"
+              id="master_drawing"
+              name="master_drawing"
               type="url"
-              defaultValue={part?.master_drawing_url || ''}
+              defaultValue={specs.master_drawing || ''}
             />
           </div>
 
           <div>
-            <Label htmlFor="qc_drawing_url">QC Drawing URL</Label>
+            <Label htmlFor="qc_drawing">QC Drawing URL</Label>
             <Input
-              id="qc_drawing_url"
-              name="qc_drawing_url"
+              id="qc_drawing"
+              name="qc_drawing"
               type="url"
-              defaultValue={part?.qc_drawing_url || ''}
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="notes">Notes</Label>
-            <textarea
-              id="notes"
-              name="notes"
-              className="w-full min-h-[100px] px-3 py-2 text-sm rounded-md border border-input bg-background"
-              defaultValue={part?.notes || ''}
+              defaultValue={specs.qc_drawing || ''}
             />
           </div>
         </TabsContent>

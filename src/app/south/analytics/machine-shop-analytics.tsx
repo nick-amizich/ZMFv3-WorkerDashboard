@@ -36,7 +36,6 @@ interface Analytics {
   inventoryMetrics: {
     totalSpecies: number
     lowStockAlerts: number
-    totalValue: number
     turnoverRate: number
   }
   orderMetrics: {
@@ -79,7 +78,6 @@ export function MachineShopAnalytics() {
         inventoryMetrics: {
           totalSpecies: 12,
           lowStockAlerts: 3,
-          totalValue: 45000,
           turnoverRate: 4.2
         },
         orderMetrics: {
@@ -142,7 +140,7 @@ export function MachineShopAnalytics() {
       </div>
 
       {/* Key Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Production</CardTitle>
@@ -182,18 +180,6 @@ export function MachineShopAnalytics() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inventory Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${analytics.inventoryMetrics.totalValue.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              {analytics.inventoryMetrics.lowStockAlerts} low stock alerts
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Detailed Analytics Tabs */}
@@ -276,10 +262,6 @@ export function MachineShopAnalytics() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Wood Species</p>
                   <p className="text-2xl font-bold">{analytics.inventoryMetrics.totalSpecies}</p>
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Total Value</p>
-                  <p className="text-2xl font-bold">${analytics.inventoryMetrics.totalValue.toLocaleString()}</p>
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Low Stock Alerts</p>

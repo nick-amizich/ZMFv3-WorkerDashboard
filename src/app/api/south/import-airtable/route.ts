@@ -193,11 +193,84 @@ async function processProductionRequests(records: any[], supabase: any) {
   for (const record of records) {
     if (!record['Monday Part Request'] || record['Request Status'] !== 'Open') continue
     
-    const partName = record['Monday Part Request']
-    const partId = partsMap.get(partName)
+    // Monday Part Request is the product name
+    const productName = record['Monday Part Request']
+    
+    // Try to find a matching part in the catalog
+    // The product name might be in format like "Portable Baffles" (plural) or "Atrium Open"
+    // We need to match intelligently - "Portable Baffles" should match "Portable Baffle" but not necessarily left/right
+    let partId = null
+    let bestMatch = null
+    let bestMatchScore = 0
+    
+    // Normalize the product name for matching
+    const normalizedProduct = productName.toLowerCase()
+      .replace(/s$/, '') // Remove trailing 's' for plurals
+      .replace(/\s+/g, ' ') // Normalize spaces
+      .trim()
+    
+    for (const [partName, id] of partsMap) {
+      const normalizedPart = partName.toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim()
+      
+      // Skip left/right specific parts unless exact match
+      if ((normalizedPart.includes(' left') || normalizedPart.includes(' right')) && 
+          !normalizedProduct.includes(' left') && !normalizedProduct.includes(' right')) {
+        continue
+      }
+      
+      // Calculate match score
+      let score = 0
+      
+      // Exact match (highest priority)
+      if (normalizedProduct === normalizedPart) {
+        score = 100
+      }
+      // Product contains part name
+      else if (normalizedProduct.includes(normalizedPart)) {
+        score = 80
+      }
+      // Part contains product name
+      else if (normalizedPart.includes(normalizedProduct)) {
+        score = 70
+      }
+      // Partial word matching
+      else {
+        const productWords = normalizedProduct.split(' ')
+        const partWords = normalizedPart.split(' ')
+        const matchingWords = productWords.filter(pw => 
+          partWords.some(ptw => ptw.includes(pw) || pw.includes(ptw))
+        )
+        score = (matchingWords.length / Math.max(productWords.length, partWords.length)) * 60
+      }
+      
+      if (score > bestMatchScore) {
+        bestMatchScore = score
+        bestMatch = id
+      }
+    }
+    
+    // Only use match if confidence is high enough
+    partId = bestMatchScore >= 50 ? bestMatch : null
+    
+    // Log matching result for debugging
+    if (partId) {
+      const matchedPartName = Array.from(partsMap.entries()).find(([_, id]) => id === partId)?.[0]
+      console.log(`Matched "${productName}" to "${matchedPartName}" with score ${bestMatchScore}`)
+    } else {
+      console.log(`No match found for "${productName}" (best score: ${bestMatchScore})`)
+    }
     
     const qtyOrdered = parseInt(record['Qty On Order']) || 0
     const qtyCompleted = parseInt(record['Qty Completed']) || 0
+    
+    // Calculate pricing based on Part Type
+    const partType = record['Part Type']
+    let unitPrice = null
+    if (partType === 'Baffles') unitPrice = 20.00
+    else if (partType === 'Cups') unitPrice = 40.00
+    else if (partType === 'Stands') unitPrice = 25.00
     
     processedData.push({
       request_number: record['Request ID'] || `PR-${Date.now()}`,
@@ -208,13 +281,21 @@ async function processProductionRequests(records: any[], supabase: any) {
       due_date: new Date().toISOString().split('T')[0], // Default to today
       priority: 'normal',
       status: qtyCompleted >= qtyOrdered ? 'completed' : 'in_production',
+      unit_price: unitPrice,
       notes: JSON.stringify({
+        product_name: productName, // Store the original Monday Part Request name
         material: record['Material'],
         part_type: record['Part Type'],
         remaining_hours: record['Remaining Manufacturing Time (Hours)'],
+        pricing_info: record['Pricing'],
         airtable_id: record['AirtableID'],
         created: record['Created'],
-        last_modified: record['Last Modified Time']
+        last_modified: record['Last Modified Time'],
+        daily_updates: record['Daily Update'] ? [record['Daily Update']] : [],
+        // Check if this is likely a combined left/right order
+        includes_left_right: partType === 'Baffles' || partType === 'Cups' || 
+                           productName.toLowerCase().includes('baffle') ||
+                           productName.toLowerCase().includes('cup')
       })
     })
   }
