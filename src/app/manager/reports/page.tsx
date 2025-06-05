@@ -1,25 +1,9 @@
 'use client'
 
 import React from 'react'
-import { QualityReportingSuite } from '@/components/manager/quality-reporting-suite'
-import { useToast } from '@/hooks/use-toast'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function ReportsPage() {
-  const { toast } = useToast()
-
-  const handleGenerateReport = (report: any) => {
-    toast({
-      title: 'Report Generated',
-      description: `${report.title} has been generated successfully`,
-    })
-  }
-
-  const handleExportCertificate = (certificate: any) => {
-    toast({
-      title: 'Certificate Exported',
-      description: `Quality certificate for ${certificate.product_info.name} has been exported`,
-    })
-  }
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -30,10 +14,14 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      <QualityReportingSuite 
-        onGenerateReport={handleGenerateReport}
-        onExportCertificate={handleExportCertificate}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>Reports Feature</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-600">Quality reporting functionality is currently being updated.</p>
+        </CardContent>
+      </Card>
     </div>
   )
 }

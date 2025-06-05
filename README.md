@@ -98,4 +98,4 @@ Key tables:
 - `work_tasks` - Task assignment and tracking
 - `qc_templates` & `qc_results` - Quality control workflows
 
-See `CLAUDE.md` for detailed development guidelines.
+See `docs/` for comprehensive documentation including development guidelines, deployment procedures, and feature guides.
