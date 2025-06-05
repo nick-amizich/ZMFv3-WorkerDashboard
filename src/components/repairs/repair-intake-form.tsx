@@ -9,9 +9,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Upload, Save, Send, Lightbulb, X, ImageIcon, User, Building2 } from "lucide-react"
+import { Upload, Save, Send, Lightbulb, X, ImageIcon, User, Building2, ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { CreateRepairInput } from "@/types/repairs"
+
+type WizardStep = "selection" | "customer-form" | "internal-form"
 
 export default function RepairIntakeForm() {
   const { toast } = useToast()
@@ -19,7 +21,7 @@ export default function RepairIntakeForm() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
-  const [currentStep, setCurrentStep] = useState<'selection' | 'form'>('selection')
+  const [currentStep, setCurrentStep] = useState<WizardStep>('selection')
   const [repairSource, setRepairSource] = useState<'customer' | 'internal'>('customer')
 
   const [formData, setFormData] = useState<Partial<CreateRepairInput>>({
@@ -36,16 +38,26 @@ export default function RepairIntakeForm() {
     orderType: "customer_return",
     customerNote: "",
     location: "Repair Wall",
-    issues: []
+    issues: [],
+    // Internal repair specific fields
+    builder: "",
+    repairNeeded: "",
+    repairCategory: ""
   })
 
   const [selectedIssues, setSelectedIssues] = useState<string[]>([])
   const [issueDetails, setIssueDetails] = useState("")
   const [photos, setPhotos] = useState<File[]>([])
 
+  const headphoneModels = [
+    "Verite Closed", "Verite Open", "Atrium Closed", "Atrium Open", 
+    "Caldera Closed", "Caldera Open", "Bokeh Closed", "Bokeh Open",
+    "Aeolus", "Ori 3.0", "Atticus", "Eikon"
+  ]
+
   const commonIssues = [
     "Driver Failure",
-    "Cable Issue",
+    "Cable Issue", 
     "Wood Damage",
     "Gimbal",
     "Headband",
@@ -54,25 +66,12 @@ export default function RepairIntakeForm() {
     "Other",
   ]
 
-  const headphoneModels = [
-    "Verite Closed",
-    "Verite Open",
-    "Atrium Closed",
-    "Atrium Open",
-    "Aeolus",
-    "Eikon",
-    "Auteur",
-    "Blackwood"
-  ]
-
-  const handleInputChange = (field: keyof CreateRepairInput, value: any) => {
+  const handleInputChange = (field: keyof CreateRepairInput, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
   const toggleIssue = (issue: string) => {
-    setSelectedIssues((prev) => 
-      prev.includes(issue) ? prev.filter((i) => i !== issue) : [...prev, issue]
-    )
+    setSelectedIssues((prev) => (prev.includes(issue) ? prev.filter((i) => i !== issue) : [...prev, issue]))
   }
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,7 +80,7 @@ export default function RepairIntakeForm() {
 
     setUploadingPhotos(true)
     try {
-      setPhotos(prev => [...prev, ...files])
+      setPhotos([...photos, ...files])
       toast({
         title: "Photos Added",
         description: `${files.length} photo(s) added successfully`,
@@ -89,7 +88,7 @@ export default function RepairIntakeForm() {
     } catch (error) {
       toast({
         title: "Upload Error",
-        description: "Failed to add photos",
+        description: "Failed to upload photos",
         variant: "destructive",
       })
     } finally {
@@ -132,8 +131,20 @@ export default function RepairIntakeForm() {
   }
 
   const validateForm = (): boolean => {
-    // Only validate customer fields for customer repairs
-    if (repairSource === 'customer') {
+    if (repairSource === 'internal') {
+      const required = ["orderNumber", "builder", "repairNeeded", "location", "repairCategory"]
+      const missing = required.filter((field) => !formData[field as keyof CreateRepairInput])
+
+      if (missing.length > 0) {
+        toast({
+          title: "Validation Error",
+          description: `Please fill in: ${missing.join(", ")}`,
+          variant: "destructive",
+        })
+        return false
+      }
+    } else {
+      // Customer repair validation
       if (!formData.customerName?.trim()) {
         toast({
           title: "Validation Error",
@@ -151,35 +162,27 @@ export default function RepairIntakeForm() {
         })
         return false
       }
-    }
 
-    if (!formData.model) {
-      toast({
-        title: "Validation Error",
-        description: "Model is required",
-        variant: "destructive",
-      })
-      return false
-    }
+      if (!formData.model) {
+        toast({
+          title: "Validation Error",
+          description: "Model is required",
+          variant: "destructive",
+        })
+        return false
+      }
 
-    if (selectedIssues.length === 0 && !issueDetails.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Please select at least one issue or describe the problem",
-        variant: "destructive",
-      })
-      return false
+      if (selectedIssues.length === 0 && !issueDetails.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Please select at least one issue or describe the problem",
+          variant: "destructive",
+        })
+        return false
+      }
     }
 
     return true
-  }
-
-  const handleSaveDraft = () => {
-    localStorage.setItem("repairDraft", JSON.stringify({ formData, selectedIssues, issueDetails }))
-    toast({
-      title: "Draft Saved",
-      description: "Your repair form has been saved as a draft",
-    })
   }
 
   const handleSubmit = async () => {
@@ -187,23 +190,32 @@ export default function RepairIntakeForm() {
 
     setIsLoading(true)
     try {
-      // Build issues array
+      // Build issues array for customer repairs
       const issues: CreateRepairInput['issues'] = []
       
-      // Add selected common issues
-      selectedIssues.forEach(issue => {
-        issues.push({
-          category: issue.toLowerCase().replace(" ", "_"),
-          specificIssue: issue,
-          severity: 'functional' // Default, can be enhanced later
+      if (repairSource === 'customer') {
+        // Add selected common issues
+        selectedIssues.forEach(issue => {
+          issues.push({
+            category: issue.toLowerCase().replace(" ", "_"),
+            specificIssue: issue,
+            severity: 'functional' // Default, can be enhanced later
+          })
         })
-      })
-      
-      // Add custom issue description if provided
-      if (issueDetails.trim()) {
+        
+        // Add custom issue description if provided
+        if (issueDetails.trim()) {
+          issues.push({
+            category: 'other',
+            specificIssue: issueDetails,
+            severity: 'functional'
+          })
+        }
+      } else {
+        // For internal repairs, create issue from repair needed
         issues.push({
-          category: 'other',
-          specificIssue: issueDetails,
+          category: formData.repairCategory || 'other',
+          specificIssue: formData.repairNeeded || '',
           severity: 'functional'
         })
       }
@@ -252,13 +264,23 @@ export default function RepairIntakeForm() {
     }
   }
 
+  const handleSaveDraft = () => {
+    localStorage.setItem("repairDraft", JSON.stringify({ formData, selectedIssues, issueDetails, repairSource, currentStep }))
+    toast({
+      title: "Draft Saved",
+      description: "Your repair form has been saved as a draft",
+    })
+  }
+
   const loadDraft = () => {
     const saved = localStorage.getItem("repairDraft")
     if (saved) {
-      const { formData: savedForm, selectedIssues: savedIssues, issueDetails: savedDetails } = JSON.parse(saved)
+      const { formData: savedForm, selectedIssues: savedIssues, issueDetails: savedDetails, repairSource: savedSource, currentStep: savedStep } = JSON.parse(saved)
       setFormData(savedForm)
       setSelectedIssues(savedIssues || [])
       setIssueDetails(savedDetails || "")
+      setRepairSource(savedSource || 'customer')
+      setCurrentStep(savedStep || 'selection')
       toast({
         title: "Draft Loaded",
         description: "Your saved draft has been loaded",
@@ -266,53 +288,48 @@ export default function RepairIntakeForm() {
     }
   }
 
-  const aiSuggestion = getAISuggestion()
-
-  if (currentStep === 'selection') {
-    return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold mb-2">New Repair Intake</h1>
-          <p className="text-gray-600">What type of repair are you creating?</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-          {/* Customer Repair */}
-          <Card 
-            className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-blue-500"
+  const renderRepairTypeSelection = () => (
+    <Card className="max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle className="text-center">New Repair Intake</CardTitle>
+        <p className="text-center text-muted-foreground">What type of repair are you creating?</p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Button
+            variant="outline"
+            className="h-32 flex flex-col space-y-2 hover:bg-blue-50"
             onClick={() => {
               setRepairSource('customer')
-              setCurrentStep('form')
+              setCurrentStep('customer-form')
             }}
           >
-            <CardContent className="p-8 text-center">
-              <User className="h-12 w-12 mx-auto mb-4 text-blue-600" />
-              <h3 className="text-xl font-semibold mb-2">Customer Repair</h3>
-              <p className="text-gray-600">Repair for a customer return or warranty claim</p>
-            </CardContent>
-          </Card>
+            <div className="text-2xl">👤</div>
+            <div className="font-semibold">Customer Repair</div>
+            <div className="text-sm text-muted-foreground text-center">
+              Repair for a customer return or warranty claim
+            </div>
+          </Button>
 
-          {/* Internal Repair */}
-          <Card 
-            className="cursor-pointer hover:shadow-lg transition-shadow border-2 hover:border-blue-500"
+          <Button
+            variant="outline"
+            className="h-32 flex flex-col space-y-2 hover:bg-green-50"
             onClick={() => {
               setRepairSource('internal')
-              setCurrentStep('form')
+              setCurrentStep('internal-form')
             }}
           >
-            <CardContent className="p-8 text-center">
-              <Building2 className="h-12 w-12 mx-auto mb-4 text-blue-600" />
-              <h3 className="text-xl font-semibold mb-2">Internal Repair</h3>
-              <p className="text-gray-600">Internal QC or production repair</p>
-            </CardContent>
-          </Card>
+            <div className="text-2xl">🏭</div>
+            <div className="font-semibold">Internal Repair</div>
+            <div className="text-sm text-muted-foreground text-center">Internal QC or production repair</div>
+          </Button>
         </div>
-      </div>
-    )
-  }
+      </CardContent>
+    </Card>
+  )
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
+  const renderInternalForm = () => (
+    <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <Button 
@@ -320,11 +337,10 @@ export default function RepairIntakeForm() {
             onClick={() => setCurrentStep('selection')}
             className="mb-2"
           >
-            ← Back to Selection
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
           </Button>
-          <h1 className="text-3xl font-bold">
-            New {repairSource === 'customer' ? 'Customer' : 'Internal'} Repair
-          </h1>
+          <h1 className="text-3xl font-bold">Internal Repair Form</h1>
         </div>
         <div className="flex space-x-2">
           {localStorage.getItem("repairDraft") && (
@@ -340,95 +356,76 @@ export default function RepairIntakeForm() {
         </div>
       </div>
 
-      {/* Customer Information - Only for customer repairs */}
-      {repairSource === 'customer' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Customer Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Internal Repair Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4">
             <div>
-              <Label htmlFor="orderNumber">Order Number</Label>
+              <Label htmlFor="orderNumber">Order Number *</Label>
               <Input
                 id="orderNumber"
                 value={formData.orderNumber}
                 onChange={(e) => handleInputChange("orderNumber", e.target.value)}
-                placeholder="Original order number (optional)"
+                placeholder="Enter order number"
               />
             </div>
             <div>
-              <Label htmlFor="customerName">Customer Name *</Label>
+              <Label htmlFor="builder">Builder *</Label>
               <Input
-                id="customerName"
-                value={formData.customerName}
-                onChange={(e) => handleInputChange("customerName", e.target.value)}
-                placeholder="Customer name"
-                required
+                id="builder"
+                value={formData.builder}
+                onChange={(e) => handleInputChange("builder", e.target.value)}
+                placeholder="Who built this unit?"
               />
             </div>
             <div>
-              <Label htmlFor="customerEmail">Email *</Label>
-              <Input
-                id="customerEmail"
-                type="email"
-                value={formData.customerEmail}
-                onChange={(e) => handleInputChange("customerEmail", e.target.value)}
-                placeholder="customer@email.com"
-                required
+              <Label htmlFor="repairNeeded">Repair Needed *</Label>
+              <Textarea
+                id="repairNeeded"
+                value={formData.repairNeeded}
+                onChange={(e) => handleInputChange("repairNeeded", e.target.value)}
+                placeholder="Describe what repair is needed..."
+                rows={3}
               />
             </div>
             <div>
-              <Label htmlFor="customerPhone">Phone</Label>
-              <Input
-                id="customerPhone"
-                value={formData.customerPhone}
-                onChange={(e) => handleInputChange("customerPhone", e.target.value)}
-                placeholder="Phone number"
-              />
-            </div>
-          </div>
-        </CardContent>
-        </Card>
-      )}
-
-      {/* Product Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Product Information</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="model">Model *</Label>
-              <Select value={formData.model} onValueChange={(value) => handleInputChange("model", value)}>
+              <Label htmlFor="location">Location *</Label>
+              <Select value={formData.location} onValueChange={(value) => handleInputChange("location", value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select model" />
+                  <SelectValue placeholder="Where is the headphone located?" />
                 </SelectTrigger>
                 <SelectContent>
-                  {headphoneModels.map(model => (
-                    <SelectItem key={model} value={model}>{model}</SelectItem>
-                  ))}
+                  <SelectItem value="repair_wall">Repair Wall</SelectItem>
+                  <SelectItem value="repair_shelves">Repair Shelves</SelectItem>
+                  <SelectItem value="qc_room">QC Room</SelectItem>
+                  <SelectItem value="in_repair">In Repair</SelectItem>
+                  <SelectItem value="finishing_area">Finishing Area</SelectItem>
+                  <SelectItem value="shipping">Shipping</SelectItem>
+                  <SelectItem value="production">Production Floor</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="serialNumber">Serial Number</Label>
+              <Label htmlFor="repairCategory">Repair Category *</Label>
               <Input
-                id="serialNumber"
-                value={formData.serialNumber}
-                onChange={(e) => handleInputChange("serialNumber", e.target.value)}
-                placeholder="Serial number (if available)"
+                id="repairCategory"
+                value={formData.repairCategory}
+                onChange={(e) => handleInputChange("repairCategory", e.target.value)}
+                placeholder="Select or type repair category for queue assignment"
+                list="repair-categories-internal"
               />
-            </div>
-            <div>
-              <Label htmlFor="woodType">Wood Type</Label>
-              <Input
-                id="woodType"
-                value={formData.woodType}
-                onChange={(e) => handleInputChange("woodType", e.target.value)}
-                placeholder="e.g., Sapele, Cherry, Stabilized"
-              />
+              <datalist id="repair-categories-internal">
+                <option value="Driver Issue" />
+                <option value="Cable Problem" />
+                <option value="Wood Damage" />
+                <option value="Metal Finish" />
+                <option value="Gimbal Issue" />
+                <option value="Headband Problem" />
+                <option value="Electronics" />
+                <option value="Other" />
+              </datalist>
             </div>
             <div>
               <Label htmlFor="repairType">Repair Type *</Label>
@@ -444,162 +441,333 @@ export default function RepairIntakeForm() {
               </Select>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="priority">Priority</Label>
-              <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="standard">Standard</SelectItem>
-                  <SelectItem value="rush">Rush</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                value={formData.location}
-                onChange={(e) => handleInputChange("location", e.target.value)}
-                placeholder="e.g., Repair Wall, Bench 1"
-              />
-            </div>
-          </div>
-
-          {/* Photo Upload */}
-          <div>
-            <Label>Product Photos</Label>
-            <div className="mt-2 space-y-4">
-              <div
-                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 cursor-pointer"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                <div className="mt-4">
-                  <p className="text-gray-600">Click to upload photos or drag and drop</p>
-                  <p className="text-sm text-gray-500">PNG, JPG up to 10MB each</p>
-                </div>
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handlePhotoUpload}
-                className="hidden"
-                disabled={uploadingPhotos}
-              />
-
-              {/* Photo Preview */}
-              {photos.length > 0 && (
-                <div className="grid grid-cols-3 gap-4">
-                  {photos.map((photo, index) => (
-                    <div key={index} className="relative">
-                      <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
-                        <ImageIcon className="h-8 w-8 text-gray-400" />
-                      </div>
-                      <button
-                        onClick={() => removePhoto(index)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
-                        type="button"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                      <p className="text-xs text-gray-500 mt-1 truncate">{photo.name}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
         </CardContent>
       </Card>
 
-      {/* Issue Description */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Issue Description</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="flex justify-between">
+        <Button variant="outline" onClick={() => setCurrentStep('selection')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+        <Button onClick={handleSubmit} disabled={isLoading}>
+          <Send className="mr-2 h-4 w-4" />
+          {isLoading ? "Submitting..." : "Submit Internal Repair"}
+        </Button>
+      </div>
+    </div>
+  )
+
+  const renderCustomerForm = () => {
+    const aiSuggestion = getAISuggestion()
+    
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
           <div>
-            <Label>Quick Select (Common Issues)</Label>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {commonIssues.map((issue) => (
-                <Badge
-                  key={issue}
-                  variant={selectedIssues.includes(issue) ? "default" : "outline"}
-                  className="cursor-pointer"
-                  onClick={() => toggleIssue(issue)}
-                >
-                  {issue}
-                </Badge>
-              ))}
+            <Button 
+              variant="ghost" 
+              onClick={() => setCurrentStep('selection')}
+              className="mb-2"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Selection
+            </Button>
+            <h1 className="text-3xl font-bold">Customer Repair Form</h1>
+          </div>
+          <div className="flex space-x-2">
+            {localStorage.getItem("repairDraft") && (
+              <Button variant="outline" onClick={loadDraft}>
+                <Save className="mr-2 h-4 w-4" />
+                Load Draft
+              </Button>
+            )}
+            <Button variant="outline" onClick={handleSaveDraft}>
+              <Save className="mr-2 h-4 w-4" />
+              Save Draft
+            </Button>
+          </div>
+        </div>
+
+        {/* Customer Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="orderNumber">Order Number</Label>
+                <Input
+                  id="orderNumber"
+                  value={formData.orderNumber}
+                  onChange={(e) => handleInputChange("orderNumber", e.target.value)}
+                  placeholder="Enter order number if available"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerName">Customer Name *</Label>
+                <Input
+                  id="customerName"
+                  value={formData.customerName}
+                  onChange={(e) => handleInputChange("customerName", e.target.value)}
+                  placeholder="Customer name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerEmail">Email *</Label>
+                <Input
+                  id="customerEmail"
+                  type="email"
+                  value={formData.customerEmail}
+                  onChange={(e) => handleInputChange("customerEmail", e.target.value)}
+                  placeholder="customer@email.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerPhone">Phone</Label>
+                <Input
+                  id="customerPhone"
+                  value={formData.customerPhone}
+                  onChange={(e) => handleInputChange("customerPhone", e.target.value)}
+                  placeholder="Phone number"
+                />
+              </div>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          <div>
-            <Label htmlFor="issueDescription">Detailed Description</Label>
-            <Textarea
-              id="issueDescription"
-              value={issueDetails}
-              onChange={(e) => setIssueDetails(e.target.value)}
-              placeholder="Describe the issue in detail..."
-              rows={4}
-            />
-          </div>
+        {/* Product Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Product Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="model">Model *</Label>
+                <Select value={formData.model} onValueChange={(value) => handleInputChange("model", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {headphoneModels.map(model => (
+                      <SelectItem key={model} value={model}>{model}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="serialNumber">Serial Number</Label>
+                <Input
+                  id="serialNumber"
+                  value={formData.serialNumber}
+                  onChange={(e) => handleInputChange("serialNumber", e.target.value)}
+                  placeholder="Serial number (if available)"
+                />
+              </div>
+              <div>
+                <Label htmlFor="woodType">Wood Type</Label>
+                <Input
+                  id="woodType"
+                  value={formData.woodType}
+                  onChange={(e) => handleInputChange("woodType", e.target.value)}
+                  placeholder="e.g., Sapele, Cherry, Stabilized"
+                />
+              </div>
+              <div>
+                <Label htmlFor="repairType">Repair Type *</Label>
+                <Select value={formData.repairType} onValueChange={(value) => handleInputChange("repairType", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select repair type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="production">Production Repair</SelectItem>
+                    <SelectItem value="finishing">Finishing Repair</SelectItem>
+                    <SelectItem value="sonic">Sonic Repair</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-          <div>
-            <Label htmlFor="customerNote">Customer Note (Optional)</Label>
-            <Textarea
-              id="customerNote"
-              value={formData.customerNote}
-              onChange={(e) => handleInputChange("customerNote", e.target.value)}
-              placeholder="Any specific instructions or notes from the customer..."
-              rows={3}
-            />
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="priority">Priority</Label>
+                <Select value={formData.priority} onValueChange={(value) => handleInputChange("priority", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="rush">Rush</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  value={formData.location}
+                  onChange={(e) => handleInputChange("location", e.target.value)}
+                  placeholder="e.g., Repair Wall, Bench 1"
+                />
+              </div>
+            </div>
 
-          {aiSuggestion && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start space-x-2">
-                <Lightbulb className="h-5 w-5 text-blue-600 mt-0.5" />
-                <div>
-                  <div className="font-medium text-blue-900">🤖 AI Suggestion</div>
-                  <div className="text-blue-800 mt-1">{aiSuggestion.suggestion}</div>
-                  <div className="text-blue-700 mt-2 space-y-1">
-                    {aiSuggestion.items.map((item, index) => (
-                      <div key={index} className="text-sm">
-                        {item}
+            {/* Photo Upload */}
+            <div>
+              <Label>Product Photos</Label>
+              <div className="mt-2 space-y-4">
+                <div
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                  <div className="mt-4">
+                    <p className="text-gray-600">Click to upload photos or drag and drop</p>
+                    <p className="text-sm text-gray-500">PNG, JPG up to 10MB each</p>
+                  </div>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                  disabled={uploadingPhotos}
+                />
+
+                {/* Photo Preview */}
+                {photos.length > 0 && (
+                  <div className="grid grid-cols-3 gap-4">
+                    {photos.map((photo, index) => (
+                      <div key={index} className="relative">
+                        <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center">
+                          <ImageIcon className="h-8 w-8 text-gray-400" />
+                        </div>
+                        <button
+                          onClick={() => removePhoto(index)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                          type="button"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                        <p className="text-xs text-gray-500 mt-1 truncate">{photo.name}</p>
                       </div>
                     ))}
                   </div>
-                </div>
+                )}
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Actions */}
-      <div className="flex justify-between">
-        <Button variant="outline" onClick={() => router.back()}>
-          Cancel
-        </Button>
-        <div className="space-x-2">
-          <Button variant="outline" onClick={handleSaveDraft} disabled={isLoading}>
-            <Save className="mr-2 h-4 w-4" />
-            Save as Draft
+        {/* Issue Description */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Issue Description</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label>Quick Select (Common Issues)</Label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {commonIssues.map((issue) => (
+                  <Badge
+                    key={issue}
+                    variant={selectedIssues.includes(issue) ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => toggleIssue(issue)}
+                  >
+                    {issue}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="issueDescription">Detailed Description</Label>
+              <Textarea
+                id="issueDescription"
+                value={issueDetails}
+                onChange={(e) => setIssueDetails(e.target.value)}
+                placeholder="Describe the issue in detail..."
+                rows={4}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="customerNote">Customer Note (Optional)</Label>
+              <Textarea
+                id="customerNote"
+                value={formData.customerNote}
+                onChange={(e) => handleInputChange("customerNote", e.target.value)}
+                placeholder="Any specific instructions or notes from the customer..."
+                rows={3}
+              />
+            </div>
+
+            {aiSuggestion && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start space-x-2">
+                  <Lightbulb className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <div className="font-medium text-blue-900">🤖 AI Suggestion</div>
+                    <div className="text-blue-800 mt-1">{aiSuggestion.suggestion}</div>
+                    <div className="text-blue-700 mt-2 space-y-1">
+                      {aiSuggestion.items.map((item, index) => (
+                        <div key={index} className="text-sm">
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Actions */}
+        <div className="flex justify-between">
+          <Button variant="outline" onClick={() => setCurrentStep('selection')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
           </Button>
-          <Button onClick={handleSubmit} disabled={isLoading || uploadingPhotos}>
-            <Send className="mr-2 h-4 w-4" />
-            {isLoading ? "Submitting..." : "Submit for Diagnosis"}
-          </Button>
+          <div className="space-x-2">
+            <Button variant="outline" onClick={handleSaveDraft} disabled={isLoading}>
+              <Save className="mr-2 h-4 w-4" />
+              Save as Draft
+            </Button>
+            <Button onClick={handleSubmit} disabled={isLoading || uploadingPhotos}>
+              <Send className="mr-2 h-4 w-4" />
+              {isLoading ? "Submitting..." : "Submit for Diagnosis"}
+            </Button>
+          </div>
         </div>
       </div>
+    )
+  }
+
+  if (currentStep === 'selection') {
+    return (
+      <div className="p-6">
+        {renderRepairTypeSelection()}
+      </div>
+    )
+  }
+
+  if (currentStep === 'internal-form') {
+    return (
+      <div className="p-6">
+        {renderInternalForm()}
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6">
+      {renderCustomerForm()}
     </div>
   )
 }
