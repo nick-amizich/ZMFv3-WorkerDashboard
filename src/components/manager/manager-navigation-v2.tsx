@@ -45,16 +45,11 @@ interface NavItem {
 const navigationItems: NavItem[] = [
   {
     name: 'Dashboard',
-    href: '/manager/dashboard',
+    href: '/manager/dashboard-v3',
     icon: Home,
   },
   {
-    name: 'Dashboard V3',
-    href: '/manager/dashboard-v3',
-    icon: Layout,
-  },
-  {
-    name: 'Production',
+    name: 'Production & Orders',
     icon: GitBranch,
     children: [
       {
@@ -63,148 +58,90 @@ const navigationItems: NavItem[] = [
         description: 'Visual production board with drag-and-drop'
       },
       {
+        name: 'Orders & Assignments',
+        href: '/manager/orders',
+        description: 'Import orders and manage production assignments'
+      },
+      {
         name: 'Task Management',
         href: '/manager/tasks',
         description: 'Assign headphone build tasks and track production'
-      },
-      {
-        name: 'Workflows',
-        href: '/manager/workflows',
-        description: 'Create and manage production workflows'
       }
     ]
   },
   {
-    name: 'Orders',
-    href: '/manager/orders',
-    icon: Package,
-  },
-  {
-    name: 'Quality',
-    href: '/manager/quality',
+    name: 'Quality Control',
     icon: Shield,
     children: [
       {
-        name: 'Quality Dashboard',
+        name: 'QC Dashboard',
         href: '/manager/quality',
         description: 'Main quality dashboard with checkpoint templates'
       },
       {
-        name: 'Quality Analytics',
+        name: 'Analytics & Reports',
         href: '/manager/analytics',
-        description: 'Quality metrics and First Pass Yield'
+        description: 'Quality metrics, FPY, and generate certificates'
       },
       {
-        name: 'Component Tracking',
-        href: '/manager/components',
-        description: 'Track components with QR codes'
-      },
-      {
-        name: 'QC Steps',
+        name: 'QC Steps & Submissions',
         href: '/manager/qc-steps',
-        description: 'Manage QC production steps for workers',
+        description: 'Manage QC steps and review submissions',
         isNew: true
       },
       {
         name: 'Quality Holds',
         href: '/manager/quality-holds',
         description: 'Manage quality hold batches'
-      },
-      {
-        name: 'QC Submissions',
-        href: '/manager/qc-submissions',
-        description: 'Review quality control checklists'
-      },
-      {
-        name: 'Reports & Certificates',
-        href: '/manager/reports',
-        description: 'Generate quality reports and certificates'
       }
     ]
   },
   {
-    name: 'Team',
+    name: 'Team & Resources',
     icon: Users,
     children: [
       {
         name: 'Workers',
         href: '/manager/workers',
         description: 'Manage worker profiles, approvals, and permissions'
+      },
+      {
+        name: 'Machine Shop',
+        href: '/south',
+        description: 'Machine shop operations and management'
+      },
+      {
+        name: 'Automation Rules',
+        href: '/manager/automation',
+        description: 'Configure automation rules and workflows'
       }
     ]
   },
   {
-    name: 'Machine Shop',
-    href: '/south',
-    icon: Factory,
-  },
-  {
-    name: 'Automation',
-    href: '/manager/automation',
-    icon: Zap,
-  },
-  {
-    name: 'Settings',
+    name: 'Admin',
     icon: Settings,
     children: [
+      {
+        name: 'Settings',
+        href: '/manager/settings',
+        description: 'System configuration and preferences'
+      },
       {
         name: 'Headphone Models',
         href: '/manager/settings/headphone-models',
         description: 'Manage headphone models for order categorization'
       },
       {
-        name: 'General Settings',
-        href: '/manager/settings',
-        description: 'System configuration and preferences'
+        name: 'Workflows',
+        href: '/manager/workflows',
+        description: 'Advanced: Create and manage production workflows'
       }
     ]
   }
 ]
 
 // Development tools - only shown in development mode
-const devTools: NavItem[] = [
-  {
-    name: 'Dev Tools',
-    icon: Bot,
-    children: [
-      {
-        name: 'Debug',
-        href: '/manager/debug',
-        description: 'Debug panel'
-      },
-      {
-        name: 'Logs',
-        href: '/manager/logs',
-        description: 'System logs and error tracking'
-      },
-      {
-        name: 'Page Test',
-        href: '/manager/page-test',
-        description: 'Page testing tool'
-      },
-      {
-        name: 'Workflow Test',
-        href: '/manager/workflow-test',
-        description: 'Workflow testing tool'
-      },
-      {
-        name: 'Test Import',
-        href: '/manager/test-import',
-        description: 'Test data import'
-      },
-      {
-        name: 'Fix Data',
-        href: '/manager/fix-data',
-        description: 'Data repair tools'
-      },
-      {
-        name: 'Import Status',
-        href: '/manager/import-status',
-        description: 'Monitor import jobs'
-      }
-    ]
-  }
-]
+const devTools: NavItem[] = []
 
 export function ManagerNavigationV2() {
   const pathname = usePathname()
@@ -212,18 +149,51 @@ export function ManagerNavigationV2() {
   
   // Show dev tools only in development
   const isDev = process.env.NODE_ENV === 'development'
-  const allNavItems = isDev ? [...navigationItems, ...devTools] : navigationItems
+  
+  // Add dev tools to Admin section in development mode
+  const allNavItems = isDev ? navigationItems.map(item => {
+    if (item.name === 'Admin' && item.children) {
+      return {
+        ...item,
+        children: [
+          ...item.children,
+          // Add separator
+          {
+            name: '---',
+            href: '',
+            description: 'Developer Tools'
+          },
+          {
+            name: 'Debug & Logs',
+            href: '/manager/debug',
+            description: 'Debug panel and system logs'
+          },
+          {
+            name: 'Data Management',
+            href: '/manager/fix-data',
+            description: 'Data repair and import tools'
+          },
+          {
+            name: 'Testing Tools',
+            href: '/manager/page-test',
+            description: 'Page and workflow testing'
+          }
+        ]
+      }
+    }
+    return item
+  }) : navigationItems
 
   const isActive = (href: string) => {
-    if (href === '/manager/dashboard') {
-      return pathname === '/manager/dashboard' || pathname === '/manager'
+    if (href === '/manager/dashboard-v3') {
+      return pathname === '/manager/dashboard-v3' || pathname === '/manager/dashboard' || pathname === '/manager'
     }
     return pathname.startsWith(href)
   }
 
   const isChildActive = (item: NavItem) => {
     if (!item.children) return false
-    return item.children.some(child => isActive(child.href))
+    return item.children.some(child => child.href && isActive(child.href))
   }
 
   return (
@@ -272,34 +242,48 @@ export function ManagerNavigationV2() {
                     <DropdownMenuContent align="start" className="w-64">
                       <DropdownMenuLabel>{item.name}</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      {item.children.map((child) => (
-                        <DropdownMenuItem key={child.href} asChild>
-                          <Link
-                            href={child.href as any}
-                            className={cn(
-                              "w-full cursor-pointer",
-                              isActive(child.href) && "bg-blue-50"
-                            )}
-                          >
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{child.name}</span>
-                                {child.isNew && (
-                                  <Badge 
-                                    variant="secondary" 
-                                    className="px-1.5 py-0.5 text-xs bg-green-100 text-green-800 border-green-200 font-semibold"
-                                  >
-                                    NEW
-                                  </Badge>
+                      {item.children.map((child, index) => {
+                        // Handle separator
+                        if (child.name === '---') {
+                          return (
+                            <div key={`sep-${index}`}>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuLabel className="text-xs text-gray-500">
+                                {child.description}
+                              </DropdownMenuLabel>
+                            </div>
+                          )
+                        }
+                        
+                        return (
+                          <DropdownMenuItem key={child.href} asChild>
+                            <Link
+                              href={child.href as any}
+                              className={cn(
+                                "w-full cursor-pointer",
+                                isActive(child.href) && "bg-blue-50"
+                              )}
+                            >
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{child.name}</span>
+                                  {child.isNew && (
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="px-1.5 py-0.5 text-xs bg-green-100 text-green-800 border-green-200 font-semibold"
+                                    >
+                                      NEW
+                                    </Badge>
+                                  )}
+                                </div>
+                                {child.description && (
+                                  <span className="text-xs text-gray-500">{child.description}</span>
                                 )}
                               </div>
-                              {child.description && (
-                                <span className="text-xs text-gray-500">{child.description}</span>
-                              )}
-                            </div>
-                          </Link>
-                        </DropdownMenuItem>
-                      ))}
+                            </Link>
+                          </DropdownMenuItem>
+                        )
+                      })}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )
