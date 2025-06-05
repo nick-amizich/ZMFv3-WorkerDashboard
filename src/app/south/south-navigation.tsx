@@ -18,7 +18,8 @@ import {
   Activity,
   Bell,
   Calendar,
-  DollarSign
+  DollarSign,
+  FileSpreadsheet
 } from 'lucide-react'
 
 const navigation = [
@@ -36,6 +37,7 @@ const navigation = [
   { name: 'Cost Tracking', href: '/south/cost-tracking', icon: DollarSign },
   { name: 'Issues', href: '/south/issues', icon: AlertTriangle },
   { name: 'Analytics', href: '/south/analytics', icon: BarChart3 },
+  { name: 'Import Data', href: '/south/import', icon: FileSpreadsheet },
 ]
 
 export function SouthNavigation() {

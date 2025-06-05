@@ -24,7 +24,8 @@ import {
   Bell,
   Target,
   ArrowRight,
-  ClipboardList
+  ClipboardList,
+  FileSpreadsheet
 } from 'lucide-react'
 import Link from 'next/link'
 import { logBusiness, logError } from '@/lib/logger-client'
@@ -592,6 +593,12 @@ export function SouthDashboard() {
               <Link href="/south/transfers">
                 <Truck className="h-4 w-4 mr-2" />
                 New Transfer
+              </Link>
+            </Button>
+            <Button variant="outline" className="justify-start" asChild>
+              <Link href="/south/import">
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Import Data
               </Link>
             </Button>
           </div>
