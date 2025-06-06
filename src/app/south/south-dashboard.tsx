@@ -12,13 +12,9 @@ import {
   Wrench, 
   Users, 
   AlertTriangle,
-  TrendingUp,
-  Clock,
-  DollarSign,
   TreePine,
   Activity,
   Calendar,
-  CheckCircle,
   Truck,
   Zap,
   Bell,
@@ -40,8 +36,6 @@ interface DashboardMetrics {
   woodInventoryHealth: number
   maintenanceAlerts: number
   scheduledJobs: number
-  weeklyRevenue: number
-  profitMargin: number
   efficiencyScore: number
 }
 
@@ -65,8 +59,6 @@ export function SouthDashboard() {
     woodInventoryHealth: 0,
     maintenanceAlerts: 0,
     scheduledJobs: 0,
-    weeklyRevenue: 0,
-    profitMargin: 0,
     efficiencyScore: 0
   })
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
@@ -96,7 +88,6 @@ export function SouthDashboard() {
   async function loadDashboardData() {
     try {
       const now = new Date()
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
       const today = now.toISOString().split('T')[0]
 
       // Load multiple data sources in parallel
@@ -108,13 +99,13 @@ export function SouthDashboard() {
         issuesRes,
         inventoryRes,
         maintenanceRes,
-        scheduleRes,
-        revenueRes
+        scheduleRes
       ] = await Promise.all([
-        // Active production requests (remove location filter since column doesn't exist)
+        // Active production requests
         supabase
           .from('production_requests')
           .select('*')
+          .eq('location', 'south')
           .in('status', ['pending', 'in_production']),
         
         // Today's production
@@ -123,18 +114,19 @@ export function SouthDashboard() {
           .select('quantity_produced')
           .eq('manufacturing_date', today),
         
-        // Machine utilization (remove location filter since column doesn't exist)
+        // Machine utilization  
         supabase
           .from('machines')
-          .select('status'),
+          .select('status')
+          .eq('location', 'south'),
         
-        // Active workers (remove primary_location filter since column doesn't exist)
+        // Active workers at south location
         supabase
           .from('workers')
           .select('*')
           .eq('is_active', true),
         
-        // Open issues (remove location filter since column doesn't exist)
+        // Open issues
         supabase
           .from('production_issues')
           .select('*')
@@ -145,23 +137,18 @@ export function SouthDashboard() {
           .from('wood_inventory')
           .select('quantity_in_stock, minimum_stock'),
         
-        // Maintenance alerts (simplified query, remove location filter)
+        // Maintenance alerts
         supabase
           .from('machines')
-          .select('status, next_maintenance_due'),
+          .select('status, next_maintenance_due')
+          .eq('location', 'south'),
         
         // Scheduled jobs for the week (use existing table structure)
         supabase
           .from('production_requests')
           .select('*')
           .gte('created_at', now.toISOString())
-          .lte('created_at', new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()),
-        
-        // Revenue data (simplified)
-        supabase
-          .from('daily_production')
-          .select('quantity_produced')
-          .gte('manufacturing_date', weekAgo.toISOString().split('T')[0])
+          .lte('created_at', new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString())
       ])
 
       // Calculate metrics
@@ -192,10 +179,6 @@ export function SouthDashboard() {
       ).length || 0
       
       const scheduledJobs = scheduleRes.data?.length || 0
-      
-      // Simplified revenue calculation
-      const weeklyRevenue = (revenueRes.data?.reduce((sum, p) => sum + (p.quantity_produced || 0), 0) || 0) * 100 // Estimate $100 per unit
-      const profitMargin = 25 // Fixed estimate
       const efficiencyScore = Math.min(100, (machineUtilization + (activeWorkers * 10)) / 2)
 
       setMetrics({
@@ -208,8 +191,6 @@ export function SouthDashboard() {
         woodInventoryHealth,
         maintenanceAlerts,
         scheduledJobs,
-        weeklyRevenue,
-        profitMargin,
         efficiencyScore
       })
 
@@ -266,21 +247,7 @@ export function SouthDashboard() {
   return (
     <div className="space-y-6">
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Weekly Revenue
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${metrics.weeklyRevenue.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {metrics.profitMargin.toFixed(1)}% profit margin
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -316,9 +283,9 @@ export function SouthDashboard() {
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${
-              metrics.efficiencyScore >= 90 ? 'text-green-600' :
-              metrics.efficiencyScore >= 75 ? 'text-yellow-600' :
-              'text-red-600'
+              metrics.efficiencyScore >= 90 ? 'text-green-500 dark:text-green-400' :
+              metrics.efficiencyScore >= 75 ? 'text-yellow-500 dark:text-yellow-400' :
+              'text-red-500 dark:text-red-400'
             }`}>
               {metrics.efficiencyScore}%
             </div>
@@ -339,7 +306,7 @@ export function SouthDashboard() {
             <Link href="/south/production-requests" className="block">
               <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div className="flex items-center gap-3">
-                  <ClipboardList className="h-5 w-5 text-blue-600" />
+                  <ClipboardList className="h-5 w-5 text-primary" />
                   <div>
                     <p className="font-medium">Active Requests</p>
                     <p className="text-sm text-muted-foreground">In production queue</p>
@@ -355,7 +322,7 @@ export function SouthDashboard() {
             <Link href="/south/scheduling" className="block">
               <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div className="flex items-center gap-3">
-                  <Calendar className="h-5 w-5 text-purple-600" />
+                  <Calendar className="h-5 w-5 text-primary" />
                   <div>
                     <p className="font-medium">Scheduled Jobs</p>
                     <p className="text-sm text-muted-foreground">This week</p>
@@ -371,7 +338,7 @@ export function SouthDashboard() {
             <Link href="/south/daily-production" className="block">
               <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div className="flex items-center gap-3">
-                  <Users className="h-5 w-5 text-green-600" />
+                  <Users className="h-5 w-5 text-green-500 dark:text-green-400" />
                   <div>
                     <p className="font-medium">Active Workers</p>
                     <p className="text-sm text-muted-foreground">On floor</p>
@@ -396,7 +363,7 @@ export function SouthDashboard() {
             <Link href="/south/issues" className="block">
               <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div className="flex items-center gap-3">
-                  <AlertTriangle className="h-5 w-5 text-orange-600" />
+                  <AlertTriangle className="h-5 w-5 text-orange-500 dark:text-orange-400" />
                   <div>
                     <p className="font-medium">Open Issues</p>
                     <p className="text-sm text-muted-foreground">Need resolution</p>
@@ -414,7 +381,7 @@ export function SouthDashboard() {
             <Link href="/south/maintenance" className="block">
               <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div className="flex items-center gap-3">
-                  <Bell className="h-5 w-5 text-red-600" />
+                  <Bell className="h-5 w-5 text-red-500 dark:text-red-400" />
                   <div>
                     <p className="font-medium">Maintenance Alerts</p>
                     <p className="text-sm text-muted-foreground">Scheduled & predictive</p>
@@ -432,7 +399,7 @@ export function SouthDashboard() {
             <Link href="/south/transfers" className="block">
               <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div className="flex items-center gap-3">
-                  <Truck className="h-5 w-5 text-blue-600" />
+                  <Truck className="h-5 w-5 text-primary" />
                   <div>
                     <p className="font-medium">Pending Transfers</p>
                     <p className="text-sm text-muted-foreground">In transit</p>
@@ -457,7 +424,7 @@ export function SouthDashboard() {
             <Link href="/south/inventory" className="block">
               <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div className="flex items-center gap-3">
-                  <TreePine className="h-5 w-5 text-green-600" />
+                  <TreePine className="h-5 w-5 text-green-500 dark:text-green-400" />
                   <div>
                     <p className="font-medium">Wood Inventory</p>
                     <p className="text-sm text-muted-foreground">Stock health</p>
@@ -465,9 +432,9 @@ export function SouthDashboard() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xl font-bold ${
-                    metrics.woodInventoryHealth >= 80 ? 'text-green-600' :
-                    metrics.woodInventoryHealth >= 60 ? 'text-yellow-600' :
-                    'text-red-600'
+                    metrics.woodInventoryHealth >= 80 ? 'text-green-500 dark:text-green-400' :
+                    metrics.woodInventoryHealth >= 60 ? 'text-yellow-500 dark:text-yellow-400' :
+                    'text-red-500 dark:text-red-400'
                   }`}>
                     {metrics.woodInventoryHealth.toFixed(0)}%
                   </span>
@@ -479,7 +446,7 @@ export function SouthDashboard() {
             <Link href="/south/optimization" className="block">
               <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
                 <div className="flex items-center gap-3">
-                  <Zap className="h-5 w-5 text-yellow-600" />
+                  <Zap className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />
                   <div>
                     <p className="font-medium">Optimization</p>
                     <p className="text-sm text-muted-foreground">Material efficiency</p>
@@ -489,18 +456,6 @@ export function SouthDashboard() {
               </div>
             </Link>
 
-            <Link href="/south/cost-tracking" className="block">
-              <div className="flex items-center justify-between p-3 rounded-lg hover:bg-muted transition-colors">
-                <div className="flex items-center gap-3">
-                  <DollarSign className="h-5 w-5 text-green-600" />
-                  <div>
-                    <p className="font-medium">Cost Analysis</p>
-                    <p className="text-sm text-muted-foreground">Profitability tracking</p>
-                  </div>
-                </div>
-                <ArrowRight className="h-4 w-4" />
-              </div>
-            </Link>
           </CardContent>
         </Card>
       </div>
@@ -531,9 +486,9 @@ export function SouthDashboard() {
               recentActivity.map(activity => (
                 <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg border">
                   <div className={`p-2 rounded-lg ${
-                    activity.status === 'completed' ? 'bg-green-100' :
-                    activity.status === 'urgent' ? 'bg-red-100' :
-                    'bg-blue-100'
+                    activity.status === 'completed' ? 'bg-green-500/10 dark:bg-green-500/20' :
+                    activity.status === 'urgent' ? 'bg-red-500/10 dark:bg-red-500/20' :
+                    'bg-blue-500/10 dark:bg-blue-500/20'
                   }`}>
                     {activity.type === 'production' && <Wrench className="h-4 w-4" />}
                     {activity.type === 'issue' && <AlertTriangle className="h-4 w-4" />}

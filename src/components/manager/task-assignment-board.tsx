@@ -70,11 +70,11 @@ const TaskCard = memo(({
             ${snapshot.isDragging ? 'shadow-lg rotate-1' : 'hover:shadow-md'}
             ${isAssigned 
               ? isCustomWork 
-                ? 'bg-yellow-50 border-yellow-200' 
-                : 'bg-blue-50 border-blue-200'
+                ? 'bg-yellow-500/10 border-yellow-500/30' 
+                : 'bg-primary/10 border-primary/30'
               : isCustomWork 
-                ? 'border-yellow-300 bg-yellow-50' 
-                : 'bg-white border-gray-200'
+                ? 'border-yellow-500/30 bg-yellow-500/10' 
+                : 'bg-card border-border'
             }
             ${snapshot.isDragging ? 'z-50' : ''}
           `}

@@ -117,32 +117,21 @@ export function ProductionRequestsManager() {
 
   async function loadData() {
     try {
+      // Fetch data from our API endpoints
       const [requestsRes, partsRes] = await Promise.all([
-        supabase
-          .from('production_requests')
-          .select(`
-            *,
-            part:parts_catalog(
-              part_name,
-              part_type,
-              specifications
-            )
-          `)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('parts_catalog')
-          .select('*')
-          .eq('is_active', true)
-          .order('part_name')
+        fetch('/api/south/production-requests'),
+        fetch('/api/south/parts-catalog?is_active=true')
       ])
 
-      if (requestsRes.error) throw requestsRes.error
-      if (partsRes.error) throw partsRes.error
+      if (!requestsRes.ok) throw new Error('Failed to fetch requests')
+      if (!partsRes.ok) throw new Error('Failed to fetch parts')
 
-      const requestsData = requestsRes.data || []
-      setRequests(requestsData)
-      setParts(partsRes.data || [])
-      calculateMetrics(requestsData)
+      const { requests: requestsData } = await requestsRes.json()
+      const { parts: partsData } = await partsRes.json()
+
+      setRequests(requestsData || [])
+      setParts(partsData || [])
+      calculateMetrics(requestsData || [])
     } catch (error) {
       logError(error as Error, 'PRODUCTION_REQUESTS', { action: 'load' })
       toast({
@@ -192,13 +181,12 @@ export function ProductionRequestsManager() {
       
       // Check for existing duplicate based on part_id and material
       if (!editingRequest && partId !== 'none' && material) {
-        const { data: existingRequests } = await supabase
-          .from('production_requests')
-          .select('*')
-          .eq('part_id', partId)
-          .neq('status', 'completed')
+        // Get existing requests from our current state to check for duplicates
+        const existingRequests = requests.filter(r => 
+          r.part_id === partId && r.status !== 'completed'
+        )
         
-        if (existingRequests && existingRequests.length > 0) {
+        if (existingRequests.length > 0) {
           // Check if any have the same material
           const duplicate = existingRequests.find(req => {
             const existingNotes = parseNotes(req.notes)
@@ -208,16 +196,22 @@ export function ProductionRequestsManager() {
           if (duplicate) {
             // Update existing request instead of creating new one
             const newQuantityOrdered = duplicate.quantity_ordered + parseInt(formData.get('quantity_ordered') as string)
-            const { error } = await supabase
-              .from('production_requests')
-              .update({
+            
+            const response = await fetch('/api/south/production-requests', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: duplicate.id,
                 quantity_ordered: newQuantityOrdered,
                 priority: formData.get('priority') as string,
                 due_date: formData.get('due_date') as string,
               })
-              .eq('id', duplicate.id)
+            })
             
-            if (error) throw error
+            if (!response.ok) {
+              const error = await response.json()
+              throw new Error(error.error || 'Failed to update')
+            }
             
             toast({
               title: 'Request updated',
@@ -244,12 +238,19 @@ export function ProductionRequestsManager() {
       }
 
       if (editingRequest) {
-        const { error } = await supabase
-          .from('production_requests')
-          .update(requestData)
-          .eq('id', editingRequest.id)
+        const response = await fetch('/api/south/production-requests', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: editingRequest.id,
+            ...requestData
+          })
+        })
 
-        if (error) throw error
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to update')
+        }
 
         logBusiness('Production request updated', 'PRODUCTION_REQUESTS', { 
           requestId: editingRequest.id,
@@ -262,11 +263,16 @@ export function ProductionRequestsManager() {
           description: 'Production request has been updated',
         })
       } else {
-        const { error } = await supabase
-          .from('production_requests')
-          .insert([requestData])
+        const response = await fetch('/api/south/production-requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestData)
+        })
 
-        if (error) throw error
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to create')
+        }
 
         logBusiness('Production request created', 'PRODUCTION_REQUESTS', { 
           partId: requestData.part_id,
@@ -301,18 +307,22 @@ export function ProductionRequestsManager() {
     try {
       console.log(`Updating request ${requestId} to status: "${newStatus}"`)
       
-      const { data, error } = await supabase
-        .from('production_requests')
-        .update({ status: newStatus })
-        .eq('id', requestId)
-        .select()
+      const response = await fetch('/api/south/production-requests', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: requestId,
+          status: newStatus
+        })
+      })
 
-      if (error) {
-        console.error('Database error:', error)
-        throw error
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update status')
       }
 
-      console.log('Update successful:', data)
+      const { request } = await response.json()
+      console.log('Update successful:', request)
 
       toast({
         title: 'Status updated',

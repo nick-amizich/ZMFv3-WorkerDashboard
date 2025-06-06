@@ -16,7 +16,8 @@ import {
   Zap,
   Layout,
   ClipboardList,
-  Factory
+  Factory,
+  Bug
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -29,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 interface NavItem {
   name: string
@@ -174,6 +176,12 @@ export function ManagerNavigationV2() {
             description: 'Data repair and import tools'
           },
           {
+            name: 'Testing Dashboard',
+            href: '/manager/testing-dashboard',
+            description: 'Visual testing & bug tracking dashboard',
+            isNew: true
+          },
+          {
             name: 'Testing Tools',
             href: '/manager/page-test',
             description: 'Page and workflow testing'
@@ -197,16 +205,16 @@ export function ManagerNavigationV2() {
   }
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <nav className="bg-background border-b border-border sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo/Brand */}
           <div className="flex items-center">
             <Link href="/manager" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">ZMF</span>
+              <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary/80 rounded-lg flex items-center justify-center">
+                <span className="text-primary-foreground font-bold text-sm">ZMF</span>
               </div>
-              <span className="font-semibold text-gray-900 hidden sm:block">Manager Portal</span>
+              <span className="font-semibold text-foreground hidden sm:block">Manager Portal</span>
             </Link>
           </div>
 
@@ -230,8 +238,8 @@ export function ManagerNavigationV2() {
                         className={cn(
                           "flex items-center space-x-1 px-3 py-2 text-sm font-medium",
                           childActive
-                            ? "text-blue-600 bg-blue-50"
-                            : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                            ? "text-primary bg-primary/10"
+                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
                         )}
                       >
                         <Icon className="h-4 w-4" />
@@ -248,7 +256,7 @@ export function ManagerNavigationV2() {
                           return (
                             <div key={`sep-${index}`}>
                               <DropdownMenuSeparator />
-                              <DropdownMenuLabel className="text-xs text-gray-500">
+                              <DropdownMenuLabel className="text-xs text-muted-foreground">
                                 {child.description}
                               </DropdownMenuLabel>
                             </div>
@@ -261,7 +269,7 @@ export function ManagerNavigationV2() {
                               href={child.href as any}
                               className={cn(
                                 "w-full cursor-pointer",
-                                isActive(child.href) && "bg-blue-50"
+                                isActive(child.href) && "bg-primary/10"
                               )}
                             >
                               <div className="flex flex-col">
@@ -270,14 +278,14 @@ export function ManagerNavigationV2() {
                                   {child.isNew && (
                                     <Badge 
                                       variant="secondary" 
-                                      className="px-1.5 py-0.5 text-xs bg-green-100 text-green-800 border-green-200 font-semibold"
+                                      className="px-1.5 py-0.5 text-xs bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-semibold"
                                     >
                                       NEW
                                     </Badge>
                                   )}
                                 </div>
                                 {child.description && (
-                                  <span className="text-xs text-gray-500">{child.description}</span>
+                                  <span className="text-xs text-muted-foreground">{child.description}</span>
                                 )}
                               </div>
                             </Link>
@@ -299,8 +307,8 @@ export function ManagerNavigationV2() {
                   className={cn(
                     "flex items-center space-x-1 px-3 py-2 text-sm font-medium rounded-md transition-colors",
                     active
-                      ? "text-blue-600 bg-blue-50"
-                      : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                      ? "text-primary bg-primary/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -312,6 +320,7 @@ export function ManagerNavigationV2() {
 
           {/* Right side actions */}
           <div className="flex items-center space-x-2">
+            <ThemeToggle />
             <Button variant="outline" size="sm" asChild>
               <Link href="/manager/reports">
                 <FileText className="h-4 w-4 sm:mr-2" />

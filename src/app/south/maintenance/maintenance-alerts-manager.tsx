@@ -102,30 +102,26 @@ export function MaintenanceAlertsManager() {
 
   async function loadData() {
     try {
-      // Get machines with maintenance info
-      const { data: machinesData, error: machinesError } = await supabase
-        .from('machines')
-        .select('*')
-        .order('machine_name')
+      // Get data from APIs
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      
+      const [machinesRes, productionRes] = await Promise.all([
+        fetch('/api/south/machines'),
+        fetch(`/api/south/daily-production?start_date=${thirtyDaysAgo}`)
+      ])
 
-      if (machinesError) throw machinesError
+      if (!machinesRes.ok) throw new Error('Failed to fetch machines')
+      if (!productionRes.ok) throw new Error('Failed to fetch production data')
 
-      // Get production metrics for predictive analysis
-      const { data: productionData, error: productionError } = await supabase
-        .from('daily_production')
-        .select('*')
-        .gte('manufacturing_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+      const { machines: machinesData } = await machinesRes.json()
+      const { production: productionData } = await productionRes.json()
 
-      if (productionError) throw productionError
-
-      // Get downtime history
-      const { data: downtimeData, error: downtimeError } = await supabase
-        .from('machine_downtime_log')
-        .select('*')
-        .order('start_time', { ascending: false })
-        .limit(100)
-
-      if (downtimeError) throw downtimeError
+      // Extract downtime data from machines
+      const downtimeData = machinesData.flatMap((machine: any) => 
+        machine.downtime_logs || []
+      ).sort((a: any, b: any) => 
+        new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
+      ).slice(0, 100)
 
       // Generate maintenance alerts based on data
       const generatedAlerts = generateMaintenanceAlerts(machinesData, productionData, downtimeData)
@@ -372,18 +368,20 @@ export function MaintenanceAlertsManager() {
           : alert
       ))
 
-      // Update machine's last maintenance date
+      // Update machine's last maintenance date via API
       const alert = alerts.find(a => a.id === alertId)
       if (alert) {
-        const { error } = await supabase
-          .from('machines')
-          .update({ 
+        const response = await fetch('/api/south/machines', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: alert.machine_id,
             last_maintenance: new Date().toISOString(),
             status: 'operational'
           })
-          .eq('id', alert.machine_id)
+        })
 
-        if (error) throw error
+        if (!response.ok) throw new Error('Failed to update machine')
       }
 
       logBusiness('Maintenance completed', 'MAINTENANCE_ALERTS', { alertId })
@@ -406,12 +404,16 @@ export function MaintenanceAlertsManager() {
 
   async function scheduleMainenance(machineId: string, date: string) {
     try {
-      const { error } = await supabase
-        .from('machines')
-        .update({ next_maintenance_due: date })
-        .eq('id', machineId)
+      const response = await fetch('/api/south/machines', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: machineId,
+          next_maintenance_due: date
+        })
+      })
 
-      if (error) throw error
+      if (!response.ok) throw new Error('Failed to schedule maintenance')
 
       logBusiness('Maintenance scheduled', 'MAINTENANCE_ALERTS', { machineId, date })
       
@@ -434,11 +436,11 @@ export function MaintenanceAlertsManager() {
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'critical': return 'text-red-600'
-      case 'high': return 'text-orange-600'
-      case 'medium': return 'text-yellow-600'
-      case 'low': return 'text-blue-600'
-      default: return 'text-gray-600'
+      case 'critical': return 'text-red-500 dark:text-red-400'
+      case 'high': return 'text-orange-500 dark:text-orange-400'
+      case 'medium': return 'text-yellow-500 dark:text-yellow-400'
+      case 'low': return 'text-blue-500 dark:text-blue-400'
+      default: return 'text-muted-foreground'
     }
   }
 
@@ -482,7 +484,7 @@ export function MaintenanceAlertsManager() {
             <CardTitle className="text-sm font-medium">Active Alerts</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{activeAlerts.length}</div>
+            <div className="text-2xl font-bold text-red-500 dark:text-red-400">{activeAlerts.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
               Require attention
             </p>
@@ -493,7 +495,7 @@ export function MaintenanceAlertsManager() {
             <CardTitle className="text-sm font-medium">Acknowledged</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{acknowledgedAlerts.length}</div>
+            <div className="text-2xl font-bold text-yellow-500 dark:text-yellow-400">{acknowledgedAlerts.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
               In progress
             </p>
@@ -504,7 +506,7 @@ export function MaintenanceAlertsManager() {
             <CardTitle className="text-sm font-medium">Predictive Alerts</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-2xl font-bold text-blue-500 dark:text-blue-400">
               {alerts.filter(a => a.alert_type === 'predictive').length}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -601,7 +603,7 @@ export function MaintenanceAlertsManager() {
             <Card>
               <CardContent className="py-8">
                 <div className="text-center text-muted-foreground">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-600" />
+                  <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500 dark:text-green-400" />
                   <p>No active alerts</p>
                 </div>
               </CardContent>
@@ -613,10 +615,10 @@ export function MaintenanceAlertsManager() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-4">
                       <div className={`p-2 rounded-lg ${
-                        alert.severity === 'critical' ? 'bg-red-100' :
-                        alert.severity === 'high' ? 'bg-orange-100' :
-                        alert.severity === 'medium' ? 'bg-yellow-100' :
-                        'bg-blue-100'
+                        alert.severity === 'critical' ? 'bg-red-500/10 dark:bg-red-500/20' :
+                        alert.severity === 'high' ? 'bg-orange-500/10 dark:bg-orange-500/20' :
+                        alert.severity === 'medium' ? 'bg-yellow-500/10 dark:bg-yellow-500/20' :
+                        'bg-blue-500/10 dark:bg-blue-500/20'
                       }`}>
                         <div className={getSeverityColor(alert.severity)}>
                           {getAlertIcon(alert.alert_type)}
@@ -652,7 +654,7 @@ export function MaintenanceAlertsManager() {
                   </div>
 
                   {alert.metrics && (
-                    <div className="grid grid-cols-4 gap-4 mt-4 p-3 bg-gray-50 rounded-lg text-sm">
+                    <div className="grid grid-cols-4 gap-4 mt-4 p-3 bg-muted rounded-lg text-sm">
                       <div>
                         <p className="text-muted-foreground">Runtime</p>
                         <p className="font-medium">{alert.metrics.runtime_hours.toFixed(0)}h</p>
@@ -712,7 +714,7 @@ export function MaintenanceAlertsManager() {
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-yellow-600" />
+                        <Clock className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
                         <h4 className="font-medium">{alert.title}</h4>
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">
@@ -748,9 +750,9 @@ export function MaintenanceAlertsManager() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-blue-500/10 dark:bg-blue-500/20 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <Zap className="h-5 w-5 text-blue-600" />
+                      <Zap className="h-5 w-5 text-blue-500 dark:text-blue-400" />
                       <div>
                         <p className="font-medium text-sm">Predictive Accuracy</p>
                         <p className="text-xs text-muted-foreground">
@@ -758,12 +760,12 @@ export function MaintenanceAlertsManager() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-xl font-bold text-blue-600">87%</span>
+                    <span className="text-xl font-bold text-blue-500 dark:text-blue-400">87%</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-green-500/10 dark:bg-green-500/20 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <Shield className="h-5 w-5 text-green-600" />
+                      <Shield className="h-5 w-5 text-green-500 dark:text-green-400" />
                       <div>
                         <p className="font-medium text-sm">Preventive Success</p>
                         <p className="text-xs text-muted-foreground">
@@ -771,12 +773,12 @@ export function MaintenanceAlertsManager() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-xl font-bold text-green-600">92%</span>
+                    <span className="text-xl font-bold text-green-500 dark:text-green-400">92%</span>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-orange-500/10 dark:bg-orange-500/20 rounded-lg">
                     <div className="flex items-center gap-3">
-                      <Timer className="h-5 w-5 text-orange-600" />
+                      <Timer className="h-5 w-5 text-orange-500 dark:text-orange-400" />
                       <div>
                         <p className="font-medium text-sm">Avg Response Time</p>
                         <p className="text-xs text-muted-foreground">
@@ -784,7 +786,7 @@ export function MaintenanceAlertsManager() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-xl font-bold text-orange-600">2.4h</span>
+                    <span className="text-xl font-bold text-orange-500 dark:text-orange-400">2.4h</span>
                   </div>
                 </div>
               </CardContent>
@@ -808,9 +810,9 @@ export function MaintenanceAlertsManager() {
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">{machine.machine_name}</span>
                           <span className={`text-sm font-bold ${
-                            reliability >= 80 ? 'text-green-600' :
-                            reliability >= 60 ? 'text-yellow-600' :
-                            'text-red-600'
+                            reliability >= 80 ? 'text-green-500 dark:text-green-400' :
+                            reliability >= 60 ? 'text-yellow-500 dark:text-yellow-400' :
+                            'text-red-500 dark:text-red-400'
                           }`}>
                             {reliability.toFixed(0)}%
                           </span>
@@ -838,7 +840,7 @@ export function MaintenanceAlertsManager() {
                 {completedAlerts.slice(0, 10).map(alert => (
                   <div key={alert.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center gap-3">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <CheckCircle className="h-4 w-4 text-green-500 dark:text-green-400" />
                       <div>
                         <p className="font-medium text-sm">{alert.machine?.machine_name}</p>
                         <p className="text-xs text-muted-foreground">

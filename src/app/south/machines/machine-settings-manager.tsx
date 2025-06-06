@@ -84,33 +84,21 @@ export function MachineSettingsManager() {
 
   async function loadData() {
     try {
-      const [machinesRes, settingsRes, partsRes] = await Promise.all([
-        supabase
-          .from('machines')
-          .select('*')
-          .order('machine_name'),
-        supabase
-          .from('machine_settings')
-          .select(`
-            *,
-            part:parts_catalog(part_name, part_type),
-            validator:workers!machine_settings_validated_by_fkey(name)
-          `)
-          .order('part_id, operation_number'),
-        supabase
-          .from('parts_catalog')
-          .select('id, part_name, part_type')
-          .eq('status', 'active')
-          .order('part_name')
+      const [machinesRes, partsRes] = await Promise.all([
+        fetch('/api/south/machines?include_downtime=false'),
+        fetch('/api/south/parts-catalog?is_active=true')
       ])
 
-      if (machinesRes.error) throw machinesRes.error
-      if (settingsRes.error) throw settingsRes.error
-      if (partsRes.error) throw partsRes.error
+      if (!machinesRes.ok) throw new Error('Failed to fetch machines')
+      if (!partsRes.ok) throw new Error('Failed to fetch parts')
 
-      setMachines(machinesRes.data || [])
-      setMachineSettings(settingsRes.data || [])
-      setParts(partsRes.data || [])
+      const { machines: machinesData } = await machinesRes.json()
+      const { parts: partsData } = await partsRes.json()
+
+      setMachines(machinesData || [])
+      setParts(partsData || [])
+      // Note: machine_settings table doesn't exist in the schema, so we'll skip that
+      setMachineSettings([])
     } catch (error) {
       logError(error as Error, 'MACHINE_SETTINGS', { action: 'load' })
       toast({
@@ -128,23 +116,28 @@ export function MachineSettingsManager() {
       const machineData = {
         machine_name: formData.get('machine_name') as string,
         machine_type: formData.get('machine_type') as string,
+        manufacturer: formData.get('manufacturer') as string || null,
+        model: formData.get('model') as string || null,
         serial_number: formData.get('serial_number') as string || null,
-        status: formData.get('status') as 'operational' | 'maintenance' | 'offline',
-        last_maintenance: formData.get('last_maintenance') as string || null,
-        next_maintenance_due: formData.get('next_maintenance_due') as string || null,
+        hourly_rate: formData.get('hourly_rate') ? parseFloat(formData.get('hourly_rate') as string) : null,
         notes: formData.get('notes') as string || null,
       }
 
-      const { error } = await supabase
-        .from('machines')
-        .insert([{
-          ...machineData,
-          location_id: (await supabase.from('locations').select('id').eq('code', 'south').single()).data?.id
-        }])
+      const response = await fetch('/api/south/machines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(machineData)
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to save machine')
+      }
+
+      const { machine } = await response.json()
 
       logBusiness('Machine added', 'MACHINE_SETTINGS', { 
+        machineId: machine.id,
         machineName: machineData.machine_name,
         machineType: machineData.machine_type
       })
@@ -240,12 +233,16 @@ export function MachineSettingsManager() {
 
   async function updateMachineStatus(id: string, status: string) {
     try {
-      const { error } = await supabase
-        .from('machines')
-        .update({ status })
-        .eq('id', id)
+      const response = await fetch('/api/south/machines', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status })
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update status')
+      }
 
       toast({
         title: 'Status updated',
@@ -258,6 +255,47 @@ export function MachineSettingsManager() {
       toast({
         title: 'Error updating status',
         description: 'Failed to update machine status',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  async function logDowntime(machineId: string, action: 'start' | 'end', reason?: string, notes?: string) {
+    try {
+      const response = await fetch('/api/south/machines', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          machine_id: machineId, 
+          action: `${action}_downtime`,
+          reason,
+          notes
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to log downtime')
+      }
+
+      toast({
+        title: action === 'start' ? 'Downtime started' : 'Downtime ended',
+        description: action === 'start' 
+          ? 'Machine downtime has been logged' 
+          : 'Machine is back in operation',
+      })
+
+      // Update status locally if starting downtime
+      if (action === 'start') {
+        await updateMachineStatus(machineId, 'maintenance')
+      } else {
+        await updateMachineStatus(machineId, 'operational')
+      }
+    } catch (error) {
+      logError(error as Error, 'MACHINE_SETTINGS', { action: 'log_downtime' })
+      toast({
+        title: 'Error logging downtime',
+        description: 'Failed to log machine downtime',
         variant: 'destructive',
       })
     }

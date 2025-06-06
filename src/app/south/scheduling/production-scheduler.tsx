@@ -108,76 +108,44 @@ export function ProductionScheduler() {
 
   async function loadData() {
     try {
-      // Load all necessary data
-      const [requestsRes, machinesRes, operatorsRes, jobsRes] = await Promise.all([
-        supabase
-          .from('production_requests')
-          .select(`
-            *,
-            part:parts_catalog(*)
-          `)
-          .in('status', ['pending', 'in_production'])
-          .order('due_date'),
-        supabase
-          .from('machines')
-          .select('*')
-          .eq('status', 'operational')
-          .order('machine_name'),
-        supabase
-          .from('workers')
-          .select('*')
-          .eq('is_active', true)
-          .order('name'),
-        supabase
-          .from('production_schedule')
-          .select(`
-            *,
-            production_request:production_requests(
-              customer_name,
-              quantity_ordered,
-              quantity_completed,
-              due_date,
-              priority,
-              part:parts_catalog(part_name, part_type)
-            ),
-            machine:machines(machine_name, machine_type, status),
-            operator:workers(name)
-          `)
-          .gte('scheduled_start', dateRange.start.toISOString())
-          .lte('scheduled_start', dateRange.end.toISOString())
-          .order('scheduled_start')
+      // Load all necessary data from APIs
+      const [requestsRes, machinesRes, scheduleRes] = await Promise.all([
+        fetch('/api/south/production-requests?status=pending&status=in_production'),
+        fetch('/api/south/machines?status=operational'),
+        fetch(`/api/south/production-schedule?start_date=${dateRange.start.toISOString()}&end_date=${dateRange.end.toISOString()}`)
       ])
 
-      if (requestsRes.error) throw requestsRes.error
-      if (machinesRes.error) throw machinesRes.error
+      if (!requestsRes.ok) throw new Error('Failed to fetch requests')
+      if (!machinesRes.ok) throw new Error('Failed to fetch machines')
+      if (!scheduleRes.ok) throw new Error('Failed to fetch schedule')
+
+      const { requests } = await requestsRes.json()
+      const { machines: machinesData } = await machinesRes.json()
+      const { schedules } = await scheduleRes.json()
+
+      // For operators, we'll still use Supabase directly
+      const operatorsRes = await supabase
+        .from('workers')
+        .select('*')
+        .eq('is_active', true)
+        .order('name')
+      
       if (operatorsRes.error) throw operatorsRes.error
 
-      // Handle production_schedule error gracefully - table might be empty or have issues
-      let jobs: ScheduledJob[] = []
-      if (jobsRes.error) {
-        console.warn('Failed to load existing schedule, generating new:', jobsRes.error)
-        // Generate new schedule if we can't load existing one
-        jobs = generateScheduledJobs(
-          requestsRes.data || [],
-          machinesRes.data || [],
-          operatorsRes.data || []
-        )
-      } else {
-        // Use existing jobs or generate if none exist
-        jobs = jobsRes.data && jobsRes.data.length > 0 
-          ? jobsRes.data 
-          : generateScheduledJobs(
-              requestsRes.data || [],
-              machinesRes.data || [],
-              operatorsRes.data || []
-            )
-      }
+      // Use existing schedule or generate if none exist
+      let jobs: ScheduledJob[] = schedules && schedules.length > 0 
+        ? schedules
+        : generateScheduledJobs(
+            requests || [],
+            machinesData || [],
+            operatorsRes.data || []
+          )
 
       // Detect conflicts
       const detectedConflicts = detectScheduleConflicts(jobs)
 
-      setProductionRequests(requestsRes.data || [])
-      setMachines(machinesRes.data || [])
+      setProductionRequests(requests || [])
+      setMachines(machinesData || [])
       setOperators(operatorsRes.data || [])
       setScheduledJobs(jobs)
       setConflicts(detectedConflicts)
@@ -371,6 +339,53 @@ export function ProductionScheduler() {
     return conflicts
   }
 
+  async function createScheduledJob(requestId: string, machineId: string, scheduledStart: Date, operatorId?: string) {
+    try {
+      const request = productionRequests.find(r => r.id === requestId)
+      if (!request) throw new Error('Request not found')
+
+      const setupTime = estimateSetupTime(request.part)
+      const runTime = estimateRunTime(request.part, request.quantity_ordered)
+      const scheduledEnd = new Date(scheduledStart.getTime() + (setupTime + runTime) * 60 * 1000)
+
+      const response = await fetch('/api/south/production-schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          production_request_id: requestId,
+          machine_id: machineId,
+          operator_id: operatorId || null,
+          scheduled_start: scheduledStart.toISOString(),
+          scheduled_end: scheduledEnd.toISOString(),
+          setup_time_minutes: setupTime,
+          run_time_minutes: runTime,
+          priority: request.priority === 'rush' ? 1 : request.priority === 'high' ? 3 : 5
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create schedule')
+      }
+
+      const { schedule } = await response.json()
+
+      toast({
+        title: 'Job scheduled',
+        description: 'Production job has been scheduled successfully',
+      })
+
+      loadData() // Reload to get updated schedule
+    } catch (error) {
+      logError(error as Error, 'PRODUCTION_SCHEDULER', { action: 'create_schedule' })
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to schedule job',
+        variant: 'destructive',
+      })
+    }
+  }
+
   async function rescheduleJob(jobId: string, newStart: string, newMachineId?: string) {
     try {
       const job = scheduledJobs.find(j => j.id === jobId)
@@ -379,19 +394,21 @@ export function ProductionScheduler() {
       const totalMinutes = job.setup_time_minutes + job.run_time_minutes
       const newEnd = new Date(new Date(newStart).getTime() + totalMinutes * 60 * 1000)
 
-      const updatedJob = {
-        ...job,
-        scheduled_start: newStart,
-        scheduled_end: newEnd.toISOString(),
-        machine_id: newMachineId || job.machine_id
+      const response = await fetch('/api/south/production-schedule', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: jobId,
+          scheduled_start: newStart,
+          scheduled_end: newEnd.toISOString(),
+          machine_id: newMachineId || job.machine_id
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to reschedule')
       }
-
-      // Update in state
-      setScheduledJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j))
-
-      // Re-detect conflicts
-      const newJobs = scheduledJobs.map(j => j.id === jobId ? updatedJob : j)
-      setConflicts(detectScheduleConflicts(newJobs))
 
       logBusiness('Job rescheduled', 'PRODUCTION_SCHEDULER', { 
         jobId, 
@@ -403,11 +420,47 @@ export function ProductionScheduler() {
         title: 'Job rescheduled',
         description: 'The production job has been rescheduled successfully',
       })
+
+      loadData() // Reload to get updated schedule
     } catch (error) {
       logError(error as Error, 'PRODUCTION_SCHEDULER', { action: 'reschedule_job' })
       toast({
         title: 'Error',
         description: 'Failed to reschedule job',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  async function updateJobStatus(jobId: string, action: 'start' | 'complete' | 'delay' | 'cancel') {
+    try {
+      const response = await fetch('/api/south/production-schedule', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schedule_id: jobId,
+          action
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update status')
+      }
+
+      const { schedule } = await response.json()
+
+      toast({
+        title: 'Status updated',
+        description: `Job ${action === 'start' ? 'started' : action === 'complete' ? 'completed' : action}`,
+      })
+
+      loadData() // Reload to get updated schedule
+    } catch (error) {
+      logError(error as Error, 'PRODUCTION_SCHEDULER', { action: 'update_job_status' })
+      toast({
+        title: 'Error',
+        description: 'Failed to update job status',
         variant: 'destructive',
       })
     }
@@ -692,7 +745,7 @@ export function ProductionScheduler() {
                           {machineJobs.length} jobs scheduled
                         </span>
                       </div>
-                      <div className="relative h-20 bg-gray-100 rounded-lg overflow-hidden">
+                      <div className="relative h-20 bg-muted rounded-lg overflow-hidden">
                         {machineJobs.map((job, index) => {
                           const start = new Date(job.scheduled_start)
                           const end = new Date(job.scheduled_end)
@@ -812,9 +865,23 @@ export function ProductionScheduler() {
                       </div>
                       <div className="flex items-center gap-2">
                         {job.status === 'scheduled' && (
-                          <Button size="sm" variant="outline">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => updateJobStatus(job.id, 'start')}
+                          >
                             <Play className="h-3 w-3 mr-1" />
                             Start
+                          </Button>
+                        )}
+                        {job.status === 'in_progress' && (
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => updateJobStatus(job.id, 'complete')}
+                          >
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Complete
                           </Button>
                         )}
                         <Button size="sm" variant="ghost">

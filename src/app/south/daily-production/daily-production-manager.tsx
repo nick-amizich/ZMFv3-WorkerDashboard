@@ -67,48 +67,24 @@ export function DailyProductionManager() {
 
   async function loadData() {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
       const [productionsRes, requestsRes, machinesRes] = await Promise.all([
-        supabase
-          .from('daily_production')
-          .select(`
-            *,
-            production_request:production_requests(
-              quantity_ordered,
-              quantity_completed,
-              notes,
-              part:parts_catalog(part_name, part_type)
-            ),
-            machine:machines(machine_name)
-          `)
-          .eq('manufacturing_date', selectedDate)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('production_requests')
-          .select(`
-            *,
-            notes,
-            part:parts_catalog(part_name, part_type)
-          `)
-          .in('status', ['pending', 'in_production'])
-          .order('due_date'),
-        supabase
-          .from('machines')
-          .select('*')
-          .eq('status', 'operational')
-          .order('machine_name')
+        fetch(`/api/south/daily-production?start_date=${selectedDate}&end_date=${selectedDate}`),
+        fetch('/api/south/production-requests?status=pending&status=in_production'),
+        fetch('/api/south/machines?status=operational')
       ])
 
-      if (productionsRes.error) throw productionsRes.error
-      if (requestsRes.error) throw requestsRes.error
-      if (machinesRes.error) throw machinesRes.error
+      if (!productionsRes.ok) throw new Error('Failed to fetch productions')
+      if (!requestsRes.ok) throw new Error('Failed to fetch requests')
+      if (!machinesRes.ok) throw new Error('Failed to fetch machines')
 
-      console.log('Active requests:', requestsRes.data)
-      setProductions(productionsRes.data || [])
-      setActiveRequests(requestsRes.data || [])
-      setMachines(machinesRes.data || [])
+      const { production, summary } = await productionsRes.json()
+      const { requests } = await requestsRes.json()
+      const { machines: machinesData } = await machinesRes.json()
+
+      console.log('Active requests:', requests)
+      setProductions(production || [])
+      setActiveRequests(requests || [])
+      setMachines(machinesData || [])
     } catch (error) {
       logError(error as Error, 'DAILY_PRODUCTION', { action: 'load' })
       toast({
@@ -123,44 +99,29 @@ export function DailyProductionManager() {
 
   async function logProduction(formData: FormData) {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
       const productionData = {
         production_request_id: formData.get('production_request_id') as string,
         quantity_produced: parseInt(formData.get('quantity_produced') as string),
         manufacturing_date: formData.get('manufacturing_date') as string,
-        completed_by: user.id,
-        machine_id: null, // We don't track machines anymore
-        run_time_minutes: 60, // Default to 60 minutes for now
+        machine_id: formData.get('machine_id') as string || null,
+        run_time_minutes: parseInt(formData.get('run_time_minutes') as string) || 60,
+        setup_time_minutes: parseInt(formData.get('setup_time_minutes') as string) || 0,
         scrap_quantity: parseInt(formData.get('scrap_count') as string) || 0,
+        quality_notes: formData.get('quality_notes') as string || null
       }
 
-      // Insert production record
-      const { data: production, error: productionError } = await supabase
-        .from('daily_production')
-        .insert([productionData])
-        .select()
-        .single()
+      const response = await fetch('/api/south/daily-production', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productionData)
+      })
 
-      if (productionError) throw productionError
-
-      // Update production request quantity completed
-      const request = activeRequests.find(r => r.id === productionData.production_request_id)
-      if (request) {
-        const newCompleted = (request.quantity_completed || 0) + productionData.quantity_produced
-        const newStatus = newCompleted >= request.quantity_ordered ? 'completed' : 'in_production'
-
-        const { error: updateError } = await supabase
-          .from('production_requests')
-          .update({ 
-            quantity_completed: newCompleted,
-            status: newStatus
-          })
-          .eq('id', productionData.production_request_id)
-
-        if (updateError) throw updateError
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to log production')
       }
+
+      const { production } = await response.json()
 
       logBusiness('Daily production logged', 'DAILY_PRODUCTION', { 
         productionId: production.id,

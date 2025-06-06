@@ -26,19 +26,19 @@ export default async function WorkerLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-background">
+      <header className="bg-card shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <h1 className="text-xl font-semibold">Worker Dashboard</h1>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 {worker.name}
               </span>
               <form action="/api/auth/signout" method="POST">
                 <button
                   type="submit"
-                  className="text-sm text-gray-700 hover:text-gray-900"
+                  className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   Sign out
                 </button>

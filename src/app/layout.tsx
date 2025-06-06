@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { LocationProvider } from "@/contexts/location-context"
+import { ThemeProvider } from "@/components/providers/theme-provider"
 
 const inter = Inter({ 
   subsets: ["latin"],
@@ -24,11 +25,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} ${inter.variable}`}>
-        <LocationProvider>
-          {children}
-        </LocationProvider>
+        <ThemeProvider>
+          <LocationProvider>
+            {children}
+          </LocationProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

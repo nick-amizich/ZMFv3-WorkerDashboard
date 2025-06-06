@@ -23,7 +23,7 @@ export default function PendingApprovalPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
@@ -46,8 +46,8 @@ export default function PendingApprovalPage() {
             </ul>
           </div>
           
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600">
+          <div className="bg-muted rounded-lg p-4">
+            <p className="text-sm text-muted-foreground">
               Need immediate access? Please contact your supervisor or manager directly.
             </p>
           </div>

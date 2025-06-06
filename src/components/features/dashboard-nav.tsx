@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { LocationSwitcher } from '@/components/features/location-switcher'
 import { ConnectionStatus } from '@/components/features/connection-status'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 const navigation = [
   { name: 'Home', href: '/' },
@@ -17,12 +18,12 @@ export function DashboardNav() {
   const appName = process.env.NEXT_PUBLIC_APP_NAME || 'ZMF Dashboard'
 
   return (
-    <nav className="bg-white shadow-sm border-b">
+    <nav className="bg-background shadow-sm border-b">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">{appName}</h1>
+              <h1 className="text-xl font-bold text-foreground">{appName}</h1>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
               {navigation.map((item) => (
@@ -32,8 +33,8 @@ export function DashboardNav() {
                   className={cn(
                     'inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium',
                     pathname === item.href
-                      ? 'border-indigo-500 text-gray-900'
-                      : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                      ? 'border-primary text-foreground'
+                      : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground'
                   )}
                 >
                   {item.name}
@@ -43,6 +44,7 @@ export function DashboardNav() {
           </div>
           <div className="flex items-center gap-4">
             <LocationSwitcher />
+            <ThemeToggle />
             <ConnectionStatus />
           </div>
         </div>

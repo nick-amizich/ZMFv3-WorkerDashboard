@@ -54,13 +54,13 @@ export function ConnectionStatus() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'connected':
-        return <CheckCircle2 className="h-3 w-3 text-green-600" />
+        return <CheckCircle2 className="h-3 w-3 text-green-500 dark:text-green-400" />
       case 'disconnected':
-        return <XCircle className="h-3 w-3 text-red-600" />
+        return <XCircle className="h-3 w-3 text-red-500 dark:text-red-400" />
       case 'checking':
-        return <Loader2 className="h-3 w-3 animate-spin text-gray-600" />
+        return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
       case 'not_configured':
-        return <XCircle className="h-3 w-3 text-yellow-600" />
+        return <XCircle className="h-3 w-3 text-yellow-500 dark:text-yellow-400" />
       default:
         return null
     }

@@ -32,7 +32,7 @@ export default async function SouthLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <SouthNavigation />
       <main className="pb-10">
         {children}

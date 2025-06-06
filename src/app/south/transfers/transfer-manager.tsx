@@ -76,41 +76,35 @@ export function TransferManager() {
 
   async function loadData() {
     try {
-      const [transfersRes, locationsRes, batchesRes] = await Promise.all([
-        supabase
-          .from('facility_transfers')
-          .select(`
-            *,
-            from_location_info:locations!from_location(name, code),
-            to_location_info:locations!to_location(name, code),
-            batch:work_batches(
-              batch_name,
-              headphone_model:headphone_models(name)
-            ),
-            creator:workers!created_by(name)
-          `)
-          .order('created_at', { ascending: false }),
+      // Fetch transfers from our API
+      const transfersRes = await fetch('/api/south/facility-transfers')
+      if (!transfersRes.ok) throw new Error('Failed to fetch transfers')
+      const { transfers: transfersData } = await transfersRes.json()
+
+      // For locations and batches, we'll use Supabase directly for now
+      // since these aren't south-specific APIs
+      const [locationsRes, batchesRes] = await Promise.all([
         supabase
           .from('locations')
           .select('*')
-          .eq('active', true),
+          .eq('is_active', true),
         supabase
           .from('work_batches')
           .select(`
             id,
-            batch_name,
-            headphone_model:headphone_models(name)
+            batch_number,
+            model,
+            specifications
           `)
-          .in('status', ['ready', 'in_production'])
+          .in('current_stage', ['ready', 'in_production'])
           .order('created_at', { ascending: false })
           .limit(50)
       ])
 
-      if (transfersRes.error) throw transfersRes.error
       if (locationsRes.error) throw locationsRes.error
       if (batchesRes.error) throw batchesRes.error
 
-      setTransfers(transfersRes.data || [])
+      setTransfers(transfersData || [])
       setLocations(locationsRes.data || [])
       setBatches(batchesRes.data || [])
     } catch (error) {
@@ -127,26 +121,27 @@ export function TransferManager() {
 
   async function createTransfer(formData: FormData) {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
       const transferData = {
         batch_id: formData.get('batch_id') as string || null,
         from_location: formData.get('from_location') as string,
         to_location: formData.get('to_location') as string,
         transfer_type: formData.get('transfer_type') as string,
         quantity: parseInt(formData.get('quantity') as string),
-        status: 'pending',
-        tracking_number: formData.get('tracking_number') as string || null,
-        notes: formData.get('notes') as string || null,
-        created_by: user.id
+        notes: formData.get('notes') as string || null
       }
 
-      const { error } = await supabase
-        .from('facility_transfers')
-        .insert([transferData])
+      const response = await fetch('/api/south/facility-transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(transferData)
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create transfer')
+      }
+
+      const { transfer } = await response.json()
 
       logBusiness('Transfer created', 'TRANSFER_MANAGER', { 
         from: transferData.from_location,
@@ -174,24 +169,26 @@ export function TransferManager() {
 
   async function updateTransferStatus(transferId: string, status: string) {
     try {
-      const updateData: any = { status }
-      
-      if (status === 'in_transit') {
-        updateData.shipped_date = new Date().toISOString()
-      } else if (status === 'received') {
-        updateData.received_date = new Date().toISOString()
+      const response = await fetch('/api/south/facility-transfers', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: transferId, 
+          status 
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update status')
       }
 
-      const { error } = await supabase
-        .from('facility_transfers')
-        .update(updateData)
-        .eq('id', transferId)
-
-      if (error) throw error
+      const { transfer } = await response.json()
 
       logBusiness(`Transfer status updated to ${status}`, 'TRANSFER_MANAGER', { 
         transferId,
-        status
+        status,
+        trackingNumber: transfer.tracking_number
       })
 
       toast({

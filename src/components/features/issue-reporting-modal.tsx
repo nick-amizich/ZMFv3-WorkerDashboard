@@ -96,25 +96,25 @@ const SEVERITY_LEVELS = [
   { 
     value: 'low', 
     label: 'Low', 
-    color: 'bg-green-100 text-green-800',
+    color: 'bg-green-500/10 text-green-700 dark:bg-green-500/20 dark:text-green-400',
     description: 'Minor issue, can be addressed later' 
   },
   { 
     value: 'medium', 
     label: 'Medium', 
-    color: 'bg-yellow-100 text-yellow-800',
+    color: 'bg-yellow-500/10 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400',
     description: 'Needs attention, may delay work' 
   },
   { 
     value: 'high', 
     label: 'High', 
-    color: 'bg-orange-100 text-orange-800',
+    color: 'bg-orange-500/10 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400',
     description: 'Urgent, blocks current work' 
   },
   { 
     value: 'critical', 
     label: 'Critical', 
-    color: 'bg-red-100 text-red-800',
+    color: 'bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-400',
     description: 'Critical failure, immediate action required' 
   }
 ]

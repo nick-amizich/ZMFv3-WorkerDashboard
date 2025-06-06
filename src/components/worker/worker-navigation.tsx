@@ -6,6 +6,7 @@ import { Home, ClipboardList, Shield, Award, Clock, CheckSquare, Eye, EyeOff } f
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 const navigationItems = [
   {
@@ -50,7 +51,7 @@ export function WorkerNavigation() {
     : navigationItems.filter(item => item.href === '/worker/qc-checklist')
 
   return (
-    <nav className="bg-white border-b border-gray-200">
+    <nav className="bg-background border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           {/* Navigation Items */}
@@ -66,8 +67,8 @@ export function WorkerNavigation() {
                   className={cn(
                     "flex items-center space-x-2 py-4 px-1 border-b-2 text-sm font-medium transition-colors",
                     isActive
-                      ? "border-blue-500 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -77,13 +78,14 @@ export function WorkerNavigation() {
             })}
           </div>
           
-          {/* Toggle Button */}
-          <div className="py-4">
+          {/* Right side actions */}
+          <div className="py-4 flex items-center gap-2">
+            <ThemeToggle />
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowAllNavigation(!showAllNavigation)}
-              className="flex items-center space-x-2 text-gray-500 hover:text-gray-700"
+              className="flex items-center space-x-2 text-muted-foreground hover:text-foreground"
             >
               {showAllNavigation ? (
                 <>

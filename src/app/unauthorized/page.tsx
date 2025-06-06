@@ -5,7 +5,7 @@ import { AlertTriangle } from 'lucide-react'
 
 export default function UnauthorizedPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-background">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
@@ -17,7 +17,7 @@ export default function UnauthorizedPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-gray-600 text-center">
+          <p className="text-sm text-muted-foreground text-center">
             Please contact your manager to activate your account. Once approved, you&apos;ll be able to access the worker dashboard.
           </p>
           <div className="flex flex-col gap-2">

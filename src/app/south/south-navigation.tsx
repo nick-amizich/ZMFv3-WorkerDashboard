@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { LocationSwitcher } from '@/components/features/location-switcher'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +29,6 @@ import {
   Activity,
   Bell,
   Calendar,
-  DollarSign,
   FileSpreadsheet,
   ChevronDown,
   Layers,
@@ -139,12 +139,6 @@ const navigation: NavItem[] = [
         description: 'Production analytics and reports'
       },
       { 
-        name: 'Cost Tracking', 
-        href: '/south/cost-tracking', 
-        icon: DollarSign,
-        description: 'Track production costs'
-      },
-      { 
         name: 'Issues', 
         href: '/south/issues', 
         icon: AlertTriangle,
@@ -169,24 +163,25 @@ export function SouthNavigation() {
   }
 
   return (
-    <nav className="bg-white shadow-sm border-b">
+    <nav className="bg-background shadow-sm border-b">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">
+              <h1 className="text-xl font-bold text-foreground">
                 ZMF South - Machine Shop
               </h1>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <LocationSwitcher />
+            <ThemeToggle />
           </div>
         </div>
       </div>
       
       {/* Secondary navigation */}
-      <div className="bg-gray-50 border-b">
+      <div className="bg-muted/50 border-b">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center space-x-1 py-2">
             {navigation.map((item) => {
@@ -207,8 +202,8 @@ export function SouthNavigation() {
                         className={cn(
                           "flex items-center gap-2 px-3 py-2 text-sm font-medium",
                           childActive
-                            ? "text-blue-600 bg-blue-50"
-                            : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                            ? "text-primary bg-primary/10"
+                            : "text-muted-foreground hover:text-foreground hover:bg-accent"
                         )}
                       >
                         <Icon className="h-4 w-4" />
@@ -227,15 +222,15 @@ export function SouthNavigation() {
                               href={child.href}
                               className={cn(
                                 "w-full cursor-pointer",
-                                isActive(child.href) && "bg-blue-50"
+                                isActive(child.href) && "bg-primary/10"
                               )}
                             >
                               <div className="flex items-start gap-3 py-1">
-                                <ChildIcon className="h-4 w-4 mt-0.5 text-gray-500" />
+                                <ChildIcon className="h-4 w-4 mt-0.5 text-muted-foreground" />
                                 <div className="flex flex-col">
                                   <span className="font-medium">{child.name}</span>
                                   {child.description && (
-                                    <span className="text-xs text-gray-500">{child.description}</span>
+                                    <span className="text-xs text-muted-foreground">{child.description}</span>
                                   )}
                                 </div>
                               </div>
@@ -258,7 +253,7 @@ export function SouthNavigation() {
                   asChild
                   className={cn(
                     "px-3 py-2",
-                    active && "text-blue-600 bg-blue-50"
+                    active && "text-primary bg-primary/10"
                   )}
                 >
                   <Link

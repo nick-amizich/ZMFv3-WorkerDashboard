@@ -37,21 +37,21 @@ interface OptimizationResult {
 
 interface MaterialStock {
   id: string
-  wood_species: string
-  quantity: number
-  size_category: string | null
-  dimensions_json: any
-  cost_per_unit: number | null
+  species: string
+  quantity_in_stock: number
+  board_feet: number | null
+  unit_cost: number | null
+  notes: string | null
 }
 
 interface PartRequirement {
   id: string
   part_name: string
   part_type: string
-  min_stock_height: number | null
-  max_stock_height: number | null
-  min_stock_length_width: number | null
-  max_stock_length_width: number | null
+  species: string | null
+  specifications: any
+  material_cost: number | null
+  estimated_labor_hours: number | null
 }
 
 export function MaterialOptimizer() {
@@ -71,36 +71,28 @@ export function MaterialOptimizer() {
   async function loadData() {
     try {
       const [inventoryRes, partsRes, requestsRes] = await Promise.all([
-        supabase
-          .from('wood_inventory')
-          .select('*')
-          .gt('quantity', 0)
-          .order('wood_species'),
-        supabase
-          .from('parts_catalog')
-          .select('*')
-          .eq('status', 'active')
-          .order('part_name'),
-        supabase
-          .from('production_requests')
-          .select(`
-            *,
-            part:parts_catalog(*)
-          `)
-          .in('status', ['pending', 'in_production'])
-          .order('priority', { ascending: false })
+        fetch('/api/south/wood-inventory'),
+        fetch('/api/south/parts-catalog?is_active=true'),
+        fetch('/api/south/production-requests?status=pending&status=in_production')
       ])
 
-      if (inventoryRes.error) throw inventoryRes.error
-      if (partsRes.error) throw partsRes.error
-      if (requestsRes.error) throw requestsRes.error
+      if (!inventoryRes.ok) throw new Error('Failed to fetch inventory')
+      if (!partsRes.ok) throw new Error('Failed to fetch parts')
+      if (!requestsRes.ok) throw new Error('Failed to fetch requests')
 
-      setInventory(inventoryRes.data || [])
-      setParts(partsRes.data || [])
-      setRequests(requestsRes.data || [])
+      const { inventory: inventoryData } = await inventoryRes.json()
+      const { parts: partsData } = await partsRes.json()
+      const { requests: requestsData } = await requestsRes.json()
+
+      // Filter inventory with stock > 0
+      const activeInventory = inventoryData.filter((item: any) => item.quantity_in_stock > 0)
+
+      setInventory(activeInventory || [])
+      setParts(partsData || [])
+      setRequests(requestsData || [])
 
       // Auto-calculate optimizations on load
-      calculateOptimizations(inventoryRes.data || [], partsRes.data || [], requestsRes.data || [])
+      calculateOptimizations(activeInventory || [], partsData || [], requestsData || [])
     } catch (error) {
       logError(error as Error, 'MATERIAL_OPTIMIZER', { action: 'load_data' })
       toast({
@@ -153,7 +145,7 @@ export function MaterialOptimizer() {
         const wastePercentage = 100 - materialEfficiency
 
         // Calculate costs
-        const costPerUnit = (stock.cost_per_unit || 0) / partsPerStock
+        const costPerUnit = (stock.unit_cost || 0) / partsPerStock
         const totalCost = costPerUnit * Math.min(possibleUnits, totalQuantityNeeded)
 
         // Generate recommendations
@@ -178,8 +170,8 @@ export function MaterialOptimizer() {
 
         results.push({
           partName: part.part_name,
-          woodSpecies: stock.wood_species,
-          availableStock: stock.quantity,
+          woodSpecies: stock.species,
+          availableStock: stock.quantity_in_stock,
           requiredStock: Math.ceil(totalQuantityNeeded / partsPerStock),
           possibleUnits,
           materialEfficiency,
@@ -204,22 +196,31 @@ export function MaterialOptimizer() {
   }
 
   function checkMaterialCompatibility(part: PartRequirement, stock: MaterialStock): boolean {
-    // Simplified compatibility check
-    // In real implementation, would check actual dimensions
-    if (part.part_type === 'cup' && stock.size_category === 'small') return false
-    if (part.part_type === 'baffle' && stock.size_category === 'block') return false
+    // Check if part species matches stock species (if specified)
+    if (part.species && part.species !== stock.species) return false
+    
+    // Check if stock has sufficient board feet for the part type
+    if (part.part_type === 'cup' && (stock.board_feet || 0) < 2) return false
+    if (part.part_type === 'baffle' && (stock.board_feet || 0) < 1) return false
+    
     return true
   }
 
   function calculatePartsPerStock(part: PartRequirement, stock: MaterialStock): number {
-    // Simplified calculation
-    // In real implementation, would use actual geometry calculations
+    // Calculate based on board feet and part type
+    const boardFeet = stock.board_feet || 1
+    
     if (part.part_type === 'cup') {
-      return stock.size_category === 'large' ? 2 : 1
+      // Cups require approximately 0.5 board feet each
+      return Math.floor(boardFeet / 0.5)
     } else if (part.part_type === 'baffle') {
-      return stock.size_category === 'board' ? 4 : 2
+      // Baffles require approximately 0.25 board feet each
+      return Math.floor(boardFeet / 0.25)
+    } else if (part.part_type === 'driver_mount') {
+      // Driver mounts require approximately 0.3 board feet each
+      return Math.floor(boardFeet / 0.3)
     }
-    return 1
+    return Math.floor(boardFeet) // Default to 1 part per board foot
   }
 
   const totalPotentialSavings = optimizations.reduce((sum, opt) => {
@@ -411,7 +412,7 @@ export function MaterialOptimizer() {
                       </h4>
                       <div className="grid gap-2 ml-6">
                         {partOpts.map((opt, i) => (
-                          <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <div key={i} className="flex items-center justify-between p-2 bg-muted rounded">
                             <span className="text-sm">{opt.woodSpecies}</span>
                             <div className="flex items-center gap-4 text-sm">
                               <span className="text-muted-foreground">
@@ -443,21 +444,21 @@ export function MaterialOptimizer() {
             <CardContent>
               <div className="space-y-6">
                 {inventory.map(stock => {
-                  const stockOpts = optimizations.filter(opt => opt.woodSpecies === stock.wood_species)
+                  const stockOpts = optimizations.filter(opt => opt.woodSpecies === stock.species)
                   if (stockOpts.length === 0) return null
 
                   return (
                     <div key={stock.id} className="space-y-2">
                       <h4 className="font-medium flex items-center gap-2">
                         <TreePine className="h-4 w-4" />
-                        {stock.wood_species}
+                        {stock.species}
                         <Badge variant="outline" className="ml-2">
-                          {stock.quantity} available
+                          {stock.quantity_in_stock} available
                         </Badge>
                       </h4>
                       <div className="grid gap-2 ml-6">
                         {stockOpts.map((opt, i) => (
-                          <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <div key={i} className="flex items-center justify-between p-2 bg-muted rounded">
                             <span className="text-sm">{opt.partName}</span>
                             <div className="flex items-center gap-4 text-sm">
                               <span className="text-muted-foreground">

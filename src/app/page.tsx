@@ -24,12 +24,12 @@ export default async function Home() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted">
       <div className="text-center space-y-8 p-8">
-        <h1 className="text-5xl font-bold text-gray-900">
+        <h1 className="text-5xl font-bold text-foreground">
           ZMF Worker Dashboard
         </h1>
-        <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
           Production management system for efficient task tracking and worker coordination
         </p>
         <div className="flex gap-4 justify-center">

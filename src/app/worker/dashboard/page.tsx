@@ -217,13 +217,13 @@ export default function WorkerDashboard() {
 
         {/* Current Workflow Progress */}
         {currentWorkflow && (
-          <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <Card className="border-primary/20 bg-primary/5">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-blue-900">
+              <CardTitle className="flex items-center gap-2 text-primary">
                 <Target className="h-5 w-5" />
                 Current Focus: {currentWorkflow.workflowName}
               </CardTitle>
-              <p className="text-blue-700">
+              <p className="text-muted-foreground">
                 Batch: {currentWorkflow.batchName} • Stage: {currentWorkflow.currentStage}
               </p>
             </CardHeader>
@@ -231,7 +231,7 @@ export default function WorkerDashboard() {
               <div className="space-y-4">
                 {/* Progress Bar */}
                 <div>
-                  <div className="flex items-center justify-between text-sm text-blue-700 mb-2">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
                     <span>Workflow Progress</span>
                     <span>{currentWorkflow.stageProgress} of {currentWorkflow.totalStages} stages</span>
                   </div>
@@ -244,14 +244,14 @@ export default function WorkerDashboard() {
                 {/* Next Stages */}
                 {currentWorkflow.nextStages.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium text-blue-800 mb-2">What&apos;s Next:</h4>
+                    <h4 className="text-sm font-medium text-foreground mb-2">What&apos;s Next:</h4>
                     <div className="flex items-center space-x-2 text-sm">
-                      <MapPin className="h-4 w-4 text-blue-600" />
-                      <span className="font-medium text-blue-900">{currentWorkflow.currentStage}</span>
+                      <MapPin className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-foreground">{currentWorkflow.currentStage}</span>
                       {currentWorkflow.nextStages.map((stage, index) => (
                         <div key={stage} className="flex items-center space-x-2">
-                          <ArrowRight className="h-4 w-4 text-blue-400" />
-                          <Badge variant="outline" className="bg-white text-blue-700 border-blue-300">
+                          <ArrowRight className="h-4 w-4 text-primary/60" />
+                          <Badge variant="outline" className="bg-background">
                             {stage}
                           </Badge>
                         </div>
@@ -299,23 +299,23 @@ export default function WorkerDashboard() {
         )}
 
         {/* QC Checklist Quick Access Card */}
-        <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50">
+        <Card className="border-green-500/20 bg-green-500/5">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-green-900">
+            <CardTitle className="flex items-center gap-2 text-foreground">
               <CheckSquare className="h-5 w-5" />
               Quality Control Checklist
             </CardTitle>
-            <p className="text-green-700">
+            <p className="text-muted-foreground">
               Complete quality checks for each production step
             </p>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <p className="text-sm text-green-800">
+              <p className="text-sm text-muted-foreground">
                 Use the QC checklist to ensure every headphone meets our quality standards. 
                 Track your progress through each production step with our mobile-friendly interface.
               </p>
-              <div className="flex items-center gap-4 text-sm text-green-700">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <CheckCircle className="h-4 w-4" />
                   <span>8 Production Steps</span>
@@ -330,7 +330,7 @@ export default function WorkerDashboard() {
                 </div>
               </div>
               <Link href="/worker/qc-checklist">
-                <Button className="w-full bg-green-600 hover:bg-green-700 text-white">
+                <Button className="w-full" variant="default">
                   Open QC Checklist
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -342,7 +342,7 @@ export default function WorkerDashboard() {
         {/* Enhanced Task List with Workflow Context */}
         <div>
           <div className="flex items-center space-x-2 mb-4">
-            <Workflow className="h-5 w-5 text-blue-600" />
+            <Workflow className="h-5 w-5 text-primary" />
             <h3 className="text-lg font-semibold">Your Tasks & Workflows</h3>
           </div>
           <EnhancedWorkerTaskList workerId={worker.id} />
